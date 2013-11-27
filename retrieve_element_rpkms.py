@@ -9,6 +9,8 @@ import gzip
 ## OPTION PARSING
 
 parser = OptionParser()
+parser.add_option("-I", "--input", dest="input", default="stdin", 
+	help="The name of the input file. The input format can be either a dashboard index file or a list of gff/gtf. leave empty for stdin.")
 parser.add_option("-d", "--output_dir", dest="output_dir", help="the folder where you want to store the output file", default="./")
 parser.add_option('-o','--output',dest='output',help='output file additional tags',default='encode',metavar='encode')
 parser.add_option('-O','--organism',dest='organism',help='human or mouse',metavar='')
@@ -18,15 +20,19 @@ parser.add_option('-f','--frac_cov',dest='frac_cov',help='region covered at leas
 parser.add_option('-F','--Frac_cov',dest='Frac_cov',help='region covered at most',default="1", metavar='1')
 parser.add_option('-e','--element', dest='element',help='choose the element you want\
  to extract the matrix for: <gene>, <transcript>, <exon>, <intron>',metavar='')
-parser.add_option('-n','--names', default=False, action='store_true', 
-	help='use it if you want the metadata as column header instead of labExpId')
+#parser.add_option('-n','--names', default=False, action='store_true', 
+#	help='use it if you want the metadata as column header instead of labExpId')
+parser.add_option('-n','--names', default="labExpId", 
+	help='The metadata you want to include in the header (comma-separated). Choose "NA" for using the file name')
 parser.add_option('-r','--replicates', default=False, action='store_true', help='use this if you want to use only replicates')
 parser.add_option('-v','--value', default='rpkm', help='choose the values (comma-separated)\
  you want to extract: <reads>, <RPKM>, <COSI>, <incRatio>', metavar='')
 options, args = parser.parse_args()
 
-output = "%s/%s.%s.%s.%s.idr_%s.thr_%s.names_%s.tsv" %(options.output_dir, options.output,
-options.organism, options.element, options.value, ''.join(options.idr.split('.')), ''.join(options.thr.split('.')), options.names)
+#output = "%s/%s.%s.%s.%s.idr_%s.thr_%s.names_%s.tsv" %(options.output_dir, options.output,
+#options.organism, options.element, options.value, ''.join(options.idr.split('.')), ''.join(options.thr.split('.')), options.names)
+output = "%s/%s.%s.%s.%s.idr_%s.thr_%s.tsv" %(options.output_dir, options.output,
+options.organism, options.element, options.value, ''.join(options.idr.split('.')), ''.join(options.thr.split('.')))
 
 ## FUNCTIONS
 
@@ -45,13 +51,25 @@ if options.value == 'rpkm' or options.value == 'cosi':
 
 d = {}
 cell_lines = set()
-for line in sys.stdin:
-	fname, meta = line.strip('; \n').split('\t')
-	meta = dict(el.split('=') for el in meta.split('; '))
-	if options.names:
-		sample = '_'.join((options.organism,meta['cell'],meta.get('age',''),meta['lab'],meta['rnaExtract'],meta['localization'],'_'.join(meta.get('dataVersion','').split())))
+
+open_input = sys.stdin if options.input == "stdin" else open(options.input)
+	
+for line in open_input:
+	splitline = line.strip("; \n").split("\t")
+	if len(splitline) == 2:
+		fname, meta = line.strip('; \n').split('\t')
+		meta = dict(el.split('=') for el in meta.split('; '))
+	elif len(splitline) == 1:
+		fname = splitline[0].split("/")[-1]
+		meta = {}
 	else:
-		sample = meta['labExpId'].strip("\"")
+		print "ERROR: Wrong input format!"
+		exit()
+	if options.names != "NA":
+		mdata_names = options.names.split(",")
+		sample = '_'.join(meta.get(v, "NA") for v in mdata_names)
+	else:
+		sample = fname
 	cell_lines.add(sample)
 	if fname.endswith('.gz'):
 		my_open = gzip.open
