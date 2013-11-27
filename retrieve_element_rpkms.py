@@ -60,7 +60,7 @@ for line in open_input:
 		fname, meta = line.strip('; \n').split('\t')
 		meta = dict(el.split('=') for el in meta.split('; '))
 	elif len(splitline) == 1:
-		fname = splitline[0].split("/")[-1]
+		fname = splitline[0]
 		meta = {}
 	else:
 		print "ERROR: Wrong input format!"
@@ -69,7 +69,7 @@ for line in open_input:
 		mdata_names = options.names.split(",")
 		sample = '_'.join(meta.get(v, "NA") for v in mdata_names)
 	else:
-		sample = fname
+		sample = fname.split("/")[-1]
 	cell_lines.add(sample)
 	if fname.endswith('.gz'):
 		my_open = gzip.open
