@@ -36,73 +36,76 @@ def project(element):
         print datetime.now(), element, "merged."
     return merged_element
 
-def count_features(bed_lines):
+def count_features(q, r):
     # Initialize
-
-    newRead = False     # keep track of split reads
-    prev_rid = None     # read id of the previous read
-    element = []        # list with all elements intersecting the read
-    NR = 0              # Row number (like awk)
-    cont_counts = {}    # Continuous read counts
-    split_counts = {}   # Split read counts
-    tot_counts = {}      # Total number of reads
-
-    command = "intersectBed -a stdin -b %s -split -wao" % (all_bed)
-    out = sp.Popen(command, shell=True, stdout=sp.PIPE, stdin=sp.PIPE)
-
-    o = iter(out.communicate(''.join(bed_lines))[0].split('\n'))
-
-    # Iterate
     while True:
-        line = o.next()
-        NR += 1
-        if 'gene' in line:
-            continue
+        newRead = False     # keep track of split reads
+        prev_rid = None     # read id of the previous read
+        element = []        # list with all elements intersecting the read
+        NR = 0              # Row number (like awk)
+        cont_counts = {}    # Continuous read counts
+        split_counts = {}   # Split read counts
+        tot_counts = {}      # Total number of reads
+
+
+        command = "intersectBed -a stdin -b %s -split -wao" % (all_bed)
+        out = sp.Popen(command, shell=True, stdout=sp.PIPE, stdin=sp.PIPE)
+
+        bed_lines = q.get()
+        o = iter(out.communicate(''.join(bed_lines))[0].split('\n'))
+
         is_split = False
-        if line != "":
-            rchr, rstart, rend, rid, rflag, rstrand, rtstart, rtend, rrgb, rbcount, rbsizes, rbstarts, achr, astart, aend, ael,covg = line.strip().split("\t")
-        newRead = (rid != prev_rid)
-        if (newRead or line=="") and NR>1:
-            elem='total'
-            tot_counts[elem] = tot_counts.get(elem,0) + 1
-            if is_split:
-                split_counts['total'] = split_counts.get('total',0) + 1
-                if len(element) > 1:
-                    if len(set(element)) == 1:
-                        elem = element[0]
+        # Iterate
+        while True:
+            line = o.next()
+            NR += 1
+            if 'gene' in line:
+                continue
+            if line != "":
+                rchr, rstart, rend, rid, rflag, rstrand, rtstart, rtend, rrgb, rbcount, rbsizes, rbstarts, achr, astart, aend, ael,covg = line.strip().split("\t")
+            newRead = (rid != prev_rid)
+            if (newRead or line=="") and prev_rid!=None:
+                elem='total'
+                tot_counts[elem] = tot_counts.get(elem,0) + 1
+                if is_split:
+                    split_counts['total'] = split_counts.get('total',0) + 1
+                    if len(element) > 1:
+                        if len(set(element)) == 1:
+                            elem = element[0]
+                        else:
+                            if 'intergenic' in element:
+                                elem = 'others'
+                            else:
+                                elem = 'exonic_intronic'
                     else:
+                        elem = element[0]
+
+                    split_counts[elem] = split_counts.get(elem, 0) + 1
+
+                else:
+                    cont_counts['total'] = cont_counts.get('total', 0) + 1
+                    if len(element) > 1:
                         if 'intergenic' in element:
                             elem = 'others'
                         else:
                             elem = 'exonic_intronic'
-                else:
-                    elem = element[0]
-
-                split_counts[elem] = split_counts.get(elem, 0) + 1
-
-            else:
-                cont_counts['total'] = cont_counts.get('total', 0) + 1
-                if len(element) > 1:
-                    if 'intergenic' in element:
-                        elem = 'others'
                     else:
-                        elem = 'exonic_intronic'
-                else:
-                    elem = element[0]
+                        elem = element[0]
 
-                cont_counts[elem] = cont_counts.get(elem, 0) + 1
+                    cont_counts[elem] = cont_counts.get(elem, 0) + 1
 
-            # Re-Initialize the counters
-            element = []
+                # Re-Initialize the counters
+                element = []
 
-            if line == "":
-                break
-        if line != "":
-            element.append(ael)
-            prev_rid = rid
-            is_split = int(rbcount) > 1
-    #   break
-    return tot_counts, cont_counts, split_counts
+                if line == "":
+                    break
+            if line != "":
+                element.append(ael)
+                prev_rid = rid
+                is_split = int(rbcount) > 1
+        #   break
+        r.put((tot_counts, cont_counts, split_counts))
+        q.task_done()
 
 if __name__ == "__main__":
     # ------------------ ARGUMENT PARSING -------------------
@@ -165,16 +168,28 @@ if __name__ == "__main__":
     import sys
     print "Running with %s processes" % args.cores
     print "Chunk size:", args.chunk_size
-    pool = MP.Pool(processes=args.cores, initializer=start_process)
 
-    result = pool.imap(count_features, grouper_nofill(args.chunk_size, bed.stdout))
+    q = MP.JoinableQueue()
+    r = MP.Queue()
 
+    for i in range(args.cores):
+        p = MP.Process(target=count_features,args=(q, r))
+        p.daemon = True
+        print "Starting", p.name
+        p.start()
+
+    for chunk in grouper_nofill(args.chunk_size, bed.stdout):
+        q.put(chunk)
+
+    q.join()
+
+    ### Print result
     tot = {}
     cont = {}
     split = {}
 
-    for r in result:
-        t, c, s = r
+    while not r.empty():
+        t, c, s = r.get()
         for k,v in t.items():
             tot[k] = tot.get(k,0) + v
         for k,v in c.items():
@@ -186,8 +201,6 @@ if __name__ == "__main__":
     print 'Total reads: ', json.dumps(tot, indent=4)
     print 'Continuous reads: ', json.dumps(cont, indent=4)
     print 'Split reads: ', json.dumps(split, indent=4)
-
-
     sys.exit()
 
     cont_counts['genic'] = sum([v for k,v in cont_counts.items() if k in ['exon','intron','exonic_intronic','others']])
