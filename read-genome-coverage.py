@@ -1,13 +1,11 @@
 #!/usr/bin/env python
 
 # *** Oct. 24th, 2013 ***
-
 from argparse import ArgumentParser
 from datetime import datetime
-from os import path
 import subprocess as sp
 import multiprocessing as MP
-from os import remove
+from os import path, remove, fork
 
 # Take only the primary alignments
 
@@ -16,111 +14,203 @@ from os import remove
 # - introns
 # - exon-intron junctions
 # - intergenic
+all_bed = ""
 
-def countReads(gtf, key):
-	res = sp.Popen("samtools view -b -F 260 %s | intersectBed -abam stdin -b %s -wa -wb -f 1 -bed | wc -l" %(args.bam, gtf), shell=True, stdout=sp.PIPE)
-	Q.put((key, int(res.stdout.readlines()[0].strip())))
-
-def splitMaps(gtf, key):
-	res = sp.Popen("samtools view -b -F 260 %s | bamToBed -i stdin -split | intersectBed -a stdin -b %s -f 1 -wao | groupBy -i stdin -g 4 -opCols 4,10 -ops count,min | awk '$2>1 && $3>0' | wc -l" %(args.bam, gtf), shell=True, stdout=sp.PIPE)
-	Q.put((key, int(res.stdout.readlines()[0].strip())))
-
-def countSam(key):
-	res = sp.Popen("samtools view -c -F 260 %s" %(args.bam), shell=True, stdout=sp.PIPE)
-	Q.put((key, int(res.stdout.readlines()[0].strip())))
+def grouper_nofill(n, iterable):
+    '''list(grouper_nofill(3, 'ABCDEFG')) --> [['A', 'B', 'C'], ['D', 'E', 'F'], ['G']]
+    '''
+    it=iter(iterable)
+    def take():
+        while 1:
+            yield [r for r in list(itertools.islice(it,n))]
+    return iter(take().next,[])
 
 
+def project(element):
+    '''element can be one of <gene> <exon>'''
+    merged_element = bn_bam + "." + bn_gtf + "." + element + ".merged.bed"
+    if path.exists(merged_element):
+        print element, "merged bed already exists"
+    else:
+        sp.call("awk '$3 == \"%s\"' %s | sort -k1,1 -k4,4n | mergeBed -i stdin | awk 'BEGIN{OFS=\"\t\"}{$(NF+1)=\"%s\";print}' > %s" %(element, args.annotation, element, merged_element), shell=True)
+        print datetime.now(), element, "merged."
+    return merged_element
 
-# ------------------ ARGUMENT PARSING -------------------
+def count_features(bed_lines):
+    # Initialize
 
+    newRead = False     # keep track of split reads
+    prev_rid = None     # read id of the previous read
+    element = []        # list with all elements intersecting the read
+    NR = 0              # Row number (like awk)
+    cont_counts = {}    # Continuous read counts
+    split_counts = {}   # Split read counts
+    tot_counts = {}      # Total number of reads
 
-parser = ArgumentParser(description = "Count the number of reads in genomic regions. Requires 6 CPUs")
-parser.add_argument("-g", "--gtf", type=str, help="gtf with all elements (genes, transcripts and exons)")
-parser.add_argument("-b", "--bam", type=str, help="bam file")
-parser.add_argument("-o", "--output", type=str, help="output file name")
-parser.add_argument("-I", "--ID", type=str, help="the ID of the experiment, from which the bam comes from")
-#parser.add_argument("-p", "--cores", type=int, help="number of CPUs", default=1)
-args = parser.parse_args()
+    command = "intersectBed -a stdin -b %s -split -wao" % (all_bed)
+    out = sp.Popen(command, shell=True, stdout=sp.PIPE, stdin=sp.PIPE)
 
+    o = iter(out.communicate(''.join(bed_lines))[0].split('\n'))
 
-# -------------------PRELIMINARY GTF PARSING -----------------
+    # Iterate
+    while True:
+        line = o.next()
+        NR += 1
+        if 'gene' in line:
+            continue
+        is_split = False
+        if line != "":
+            rchr, rstart, rend, rid, rflag, rstrand, rtstart, rtend, rrgb, rbcount, rbsizes, rbstarts, achr, astart, aend, ael,covg = line.strip().split("\t")
+        newRead = (rid != prev_rid)
+        if (newRead or line=="") and NR>1:
+            elem='total'
+            tot_counts[elem] = tot_counts.get(elem,0) + 1
+            if is_split:
+                split_counts['total'] = split_counts.get('total',0) + 1
+                if len(element) > 1:
+                    if len(set(element)) == 1:
+                        elem = element[0]
+                    else:
+                        if 'intergenic' in element:
+                            elem = 'others'
+                        else:
+                            elem = 'exonic_intronic'
+                else:
+                    elem = element[0]
 
-bn_bam = path.basename(args.bam)
+                split_counts[elem] = split_counts.get(elem, 0) + 1
 
-print datetime.now()
+            else:
+                cont_counts['total'] = cont_counts.get('total', 0) + 1
+                if len(element) > 1:
+                    if 'intergenic' in element:
+                        elem = 'others'
+                    else:
+                        elem = 'exonic_intronic'
+                else:
+                    elem = element[0]
 
-## extract exons from the gtf
-exon_gtf = bn_bam + "." + path.basename(args.gtf).rsplit(".", 1)[0] + ".exons.gtf"
-sp.call("awk '$3 == \"exon\"' %s > %s" %(args.gtf, exon_gtf), shell=True)
-print datetime.now(), "Exons extracted."
+                cont_counts[elem] = cont_counts.get(elem, 0) + 1
 
-## merge the overlapping exons with mergeBed
-merged_exons = path.basename(exon_gtf).rsplit(".", 1)[0] + ".merged.gtf"
-sp.call("sort -k1.4,1.5n -k4n %s | mergeBed -i stdin > %s" %(exon_gtf, merged_exons), shell=True)
-print datetime.now(), "Exons merged."
+            # Re-Initialize the counters
+            element = []
 
-## extract genes from the gtf
-gene_gtf = bn_bam + "."  + path.basename(args.gtf).rsplit(".", 1)[0] + ".gene.gtf"
-sp.call("awk '$3 == \"gene\"' %s > %s" %(args.gtf, gene_gtf), shell=True)
-print datetime.now(), "Genes extracted."
+            if line == "":
+                break
+        if line != "":
+            element.append(ael)
+            prev_rid = rid
+            is_split = int(rbcount) > 1
+    #   break
+    return tot_counts, cont_counts, split_counts
 
-## merge the overlapping genes with mergeBed
-merged_genes = path.basename(gene_gtf).rsplit(".", 1)[0] + ".merged.gtf"
-sp.call("sort -k1.4,1.5n -k4n %s | mergeBed -i stdin > %s" %(gene_gtf, merged_genes), shell=True)
-print datetime.now(), "Genes merged."
-
-## extract introns with subtractBed
-intron_gtf = bn_bam + "."  + path.basename(args.gtf).rsplit(".", 1)[0] + ".intron.gtf"
-sp.call("subtractBed -a %s -b %s > %s" %(merged_genes, exon_gtf, intron_gtf), shell=True)
-print datetime.now(), "Introns extracted."
-
-
-
-## ------------------- SUBMIT THE READ COUNTS TO DIFFERENT PROCESSES -----------------
-
-# Create the queue object
-Q = MP.Queue()
-
-p1 = MP.Process(target=countReads, args=(merged_exons, "exonic_reads",))
-p2 = MP.Process(target=countReads, args=(intron_gtf, "intronic_reads",))
-p3 = MP.Process(target=countReads, args=(merged_genes, "genic_reads",))
-p4 = MP.Process(target=countSam, args=("total_reads",))
-p5 = MP.Process(target=splitMaps, args=(merged_exons, "split_reads",))
-
-for p,tag in zip((p1, p2, p3, p4, p5), ("exonic","intronic","genic","total", "split")):
-	print datetime.now(), "Counting %s reads... " %tag
-	p.start()
-
-for p in (p1, p2, p3, p4, p5):
-	p.join()
-
-
-##------------------------ READ QUEUE RESULTS ------------------------------------------
-
-d = {}
-while not Q.empty():
-	res = Q.get()
-	d[res[0]] = res[1]
-
-#d["exonic_intronic_reads"] = d["genic_reads"] - d["exonic_reads"] - d["intronic_reads"]
-d["exonic_intronic_reads"] = d["genic_reads"] - d["exonic_reads"] - d["intronic_reads"] - d["split_reads"]
-d["intergenic_reads"] = d["total_reads"] - d["genic_reads"]
-
-
-
-## ------------------------ WRITE OUTPUT TO FILE ---------------------------------------
-
-
-out_f = open(args.output, "w")
-for k,v in d.iteritems():
-	out_f.write("\t".join((args.ID, str(v), str(k))) + "\n")
-out_f.close()
-
-print datetime.now()
-
-for f in (exon_gtf, merged_exons, gene_gtf, merged_genes, intron_gtf):
-	remove(f)
+if __name__ == "__main__":
+    # ------------------ ARGUMENT PARSING -------------------
 
 
-exit()
+    parser = ArgumentParser(description = "Count the number of reads in genomic regions. Requires 6 CPUs")
+    parser.add_argument("-a", "--annotation", type=str, help="gtf with all elements (genes, transcripts and exons)")
+    parser.add_argument("-g", "--genome", type=str, help="genome fasta")
+    parser.add_argument("-b", "--bam", type=str, help="bam file")
+    parser.add_argument("-o", "--output", type=str, help="output file name")
+    parser.add_argument("-I", "--ID", type=str, help="the ID of the experiment, from which the bam comes from")
+    parser.add_argument("-p", "--cores", type=int, help="number of CPUs", default=1)
+    parser.add_argument("-r", "--records-in-ram", dest='chunk_size', type=int, help="number of records to be put in memory", default=10000)
+    args = parser.parse_args()
+
+
+    # -------------------PRELIMINARY GTF PARSING -----------------
+
+    bn_bam = path.basename(args.bam).rsplit(".", 1)[0]
+    bn_gtf = path.basename(args.annotation).rsplit(".", 1)[0]
+
+
+    print datetime.now()
+
+    # Exon projections
+    merged_exons = project("exon")
+
+    # Gene projections
+    merged_genes = project("gene")
+
+    # Introns
+    intron_bed = bn_bam + "." + bn_gtf + ".intron.bed"
+    if path.exists(intron_bed):
+        print "Intron bed already exists"
+    else:
+        sp.call("subtractBed -a %s -b %s | awk 'BEGIN{OFS=\"\t\"}{$(NF)=\"intron\";print}' > %s" %(merged_genes, merged_exons, intron_bed), shell=True)
+        print datetime.now(), "intron extracted."
+
+    # Intergenic
+    intergenic_bed = bn_bam + "." + bn_gtf + ".intergenic.bed"
+    if path.exists(intergenic_bed):
+        print "Intergenic bed already exists"
+    else:
+        sp.call("complementBed -i %s -g %s | awk 'BEGIN{OFS=\"\t\"}{$(NF+1)=\"intergenic\";print}' > %s" %(merged_genes, args.genome, intergenic_bed), shell=True)
+        print datetime.now(), "intergenic extracted"
+
+    all_bed = bn_bam + "." + bn_gtf + ".all.bed"
+    sp.call("cat %s %s %s %s > %s" %(merged_exons, merged_genes, intron_bed, intergenic_bed, all_bed), shell=True)
+    print datetime.now(), "cat all bed"
+
+
+    ## -----------------------------------------------------------------------------------
+
+    bed = sp.Popen("samtools view -b -F 260 %s | bamToBed -i stdin -cigar -bed12" %(args.bam), shell=True, stdout=sp.PIPE)
+
+    def start_process():
+        print "Starting", MP.current_process().name
+
+    import itertools
+    import sys
+    print "Running with %s processes" % args.cores
+    print "Chunk size:", args.chunk_size
+    pool = MP.Pool(processes=args.cores, initializer=start_process)
+
+    result = pool.imap(count_features, grouper_nofill(args.chunk_size, bed.stdout))
+
+    tot = {}
+    cont = {}
+    split = {}
+
+    for r in result:
+        t, c, s = r
+        for k,v in t.items():
+            tot[k] = tot.get(k,0) + v
+        for k,v in c.items():
+            cont[k] = cont.get(k,0) + v
+        for k,v in s.items():
+            split[k] = split.get(k,0) + v
+
+    import json
+    print 'Total reads: ', json.dumps(tot, indent=4)
+    print 'Continuous reads: ', json.dumps(cont, indent=4)
+    print 'Split reads: ', json.dumps(split, indent=4)
+
+
+    sys.exit()
+
+    cont_counts['genic'] = sum([v for k,v in cont_counts.items() if k in ['exon','intron','exonic_intronic','others']])
+    split_counts['genic'] = sum([v for k,v in split_counts.items() if k in ['exon','intron','exonic_intronic','others']])
+
+    import json
+    print 'Total reads: ', json.dumps(tot_counts, indent=4)
+    print 'Continuous reads: ', json.dumps(cont_counts, indent=4)
+    print 'Split reads: ', json.dumps(split_counts, indent=4)
+
+    ## ------------------------ WRITE OUTPUT TO FILE ---------------------------------------
+
+
+    out_f = open(args.output, "w")
+    for k,v in d.iteritems():
+        out_f.write("\t".join((args.ID, str(v), str(k))) + "\n")
+    out_f.close()
+
+    print datetime.now()
+
+    for f in (exon_gtf, merged_exons, gene_gtf, merged_genes, intron_gtf):
+        remove(f)
+
+
+    exit()
 
