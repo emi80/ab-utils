@@ -1,11 +1,12 @@
 #!/usr/bin/env python
 
 # *** Oct. 24th, 2013 ***
-from argparse import ArgumentParser
+from argparse import ArgumentParser, FileType
 from datetime import datetime
 import subprocess as sp
 import multiprocessing as MP
-from os import path, remove, fork
+import sys
+from os import path, remove
 
 # Take only the primary alignments
 
@@ -37,10 +38,11 @@ def project(element):
     return merged_element
 
 def count_features(q, r):
-    # Initialize
     while True:
-        newRead = False     # keep track of split reads
+        # Initialize
+        newRead = False     # keep track of different reads
         prev_rid = None     # read id of the previous read
+        is_split = False    # check if current read is a split
         element = []        # list with all elements intersecting the read
         NR = 0              # Row number (like awk)
         cont_counts = {}    # Continuous read counts
@@ -54,7 +56,6 @@ def count_features(q, r):
         bed_lines = q.get()
         o = iter(out.communicate(''.join(bed_lines))[0].split('\n'))
 
-        is_split = False
         # Iterate
         while True:
             line = o.next()
@@ -115,7 +116,7 @@ if __name__ == "__main__":
     parser.add_argument("-a", "--annotation", type=str, help="gtf with all elements (genes, transcripts and exons)")
     parser.add_argument("-g", "--genome", type=str, help="genome fasta")
     parser.add_argument("-b", "--bam", type=str, help="bam file")
-    parser.add_argument("-o", "--output", type=str, help="output file name")
+    parser.add_argument("-o", "--output", type=FileType('w'), default=sys.stdout, help="output file name")
     parser.add_argument("-I", "--ID", type=str, help="the ID of the experiment, from which the bam comes from")
     parser.add_argument("-p", "--cores", type=int, help="number of CPUs", default=1)
     parser.add_argument("-r", "--records-in-ram", dest='chunk_size', type=int, help="number of records to be put in memory", default=10000)
@@ -161,9 +162,6 @@ if __name__ == "__main__":
 
     bed = sp.Popen("samtools view -b -F 260 %s | bamToBed -i stdin -cigar -bed12" %(args.bam), shell=True, stdout=sp.PIPE)
 
-    def start_process():
-        print "Starting", MP.current_process().name
-
     import itertools
     import sys
     print "Running with %s processes" % args.cores
@@ -175,7 +173,7 @@ if __name__ == "__main__":
     for i in range(args.cores):
         p = MP.Process(target=count_features,args=(q, r))
         p.daemon = True
-        print "Starting", p.name
+        #print "Starting", p.name
         p.start()
 
     for chunk in grouper_nofill(args.chunk_size, bed.stdout):
@@ -183,7 +181,8 @@ if __name__ == "__main__":
 
     q.join()
 
-    ### Print result
+    ## ------------------------ GATHER RESULTS ---------------------------------------
+
     tot = {}
     cont = {}
     split = {}
@@ -197,33 +196,20 @@ if __name__ == "__main__":
         for k,v in s.items():
             split[k] = split.get(k,0) + v
 
-    import json
-    print 'Total reads: ', json.dumps(tot, indent=4)
-    print 'Continuous reads: ', json.dumps(cont, indent=4)
-    print 'Split reads: ', json.dumps(split, indent=4)
-    sys.exit()
-
-    cont_counts['genic'] = sum([v for k,v in cont_counts.items() if k in ['exon','intron','exonic_intronic','others']])
-    split_counts['genic'] = sum([v for k,v in split_counts.items() if k in ['exon','intron','exonic_intronic','others']])
-
-    import json
-    print 'Total reads: ', json.dumps(tot_counts, indent=4)
-    print 'Continuous reads: ', json.dumps(cont_counts, indent=4)
-    print 'Split reads: ', json.dumps(split_counts, indent=4)
 
     ## ------------------------ WRITE OUTPUT TO FILE ---------------------------------------
 
-
-    out_f = open(args.output, "w")
-    for k,v in d.iteritems():
-        out_f.write("\t".join((args.ID, str(v), str(k))) + "\n")
-    out_f.close()
+    import json
+    out = args.output
+    out.write('Total reads: %s\n' % json.dumps(tot, indent=4))
+    out.write('Continuous reads: %s\n' % json.dumps(cont, indent=4))
+    out.write('Split reads: %s\n' % json.dumps(split, indent=4))
 
     print datetime.now()
+    print 'DONE'
 
-    for f in (exon_gtf, merged_exons, gene_gtf, merged_genes, intron_gtf):
+    for f in (merged_exons, merged_genes, intron_bed, intergenic_bed, all_bed):
         remove(f)
-
 
     exit()
 
