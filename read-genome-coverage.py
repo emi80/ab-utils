@@ -199,11 +199,16 @@ if __name__ == "__main__":
 
     ## ------------------------ WRITE OUTPUT TO FILE ---------------------------------------
 
-    import json
     out = args.output
-    out.write('Total reads: %s\n' % json.dumps(tot, indent=4))
-    out.write('Continuous reads: %s\n' % json.dumps(cont, indent=4))
-    out.write('Split reads: %s\n' % json.dumps(split, indent=4))
+    summary_d = {"total" : tot, "continuous" : cont, "split" : split}
+    for k, v in summary_d.iteritems():
+        for k1, v1 in v.iteritems():
+            line_array = [args.ID, k, str(k1), str(v1)]
+            out.write("\t".join(line_array)+"\n")
+#    import json
+#    out.write('Total reads: %s\n' % json.dumps(tot, indent=4))
+#    out.write('Continuous reads: %s\n' % json.dumps(cont, indent=4))
+#    out.write('Split reads: %s\n' % json.dumps(split, indent=4))
 
     print datetime.now()
     print 'DONE'
