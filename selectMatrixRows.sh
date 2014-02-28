@@ -28,6 +28,9 @@ while(getline<file>0){i++; if(i==1){print}else{gene=$1;$1="place_holder";array[g
 if (file2 != "") {while(getline<file2>0){j++; newRownames[j]=$1}}
 }
 {
-if (!($1 in array)) {print "Warning: "$1" not found in matrix!" > "/dev/stderr"; next}
+if (!($1 in array)) {print "Warning: "$1" not found in matrix!" | "cat 1>&2"; next}
 if (file2=="") {print $1, array[$1]} else {print newRownames[NR], array[$1]}
-}END{if(j!=NR){print "ERROR"> "/dev/stderr/"}}' $rownames | sed 's/place_holder\t//g'
+}END{
+# Check this error
+#if(j!=NR){print "ERROR" | "cat 1>&2"}
+}' $rownames | sed 's/place_holder\t//g'

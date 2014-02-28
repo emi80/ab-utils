@@ -1,4 +1,4 @@
-#!/soft/bin/python
+#! /usr/bin/env python
 
 compl_dict = {'A':'T','T':'A','G':'C','C':'G','N':'N'}
 

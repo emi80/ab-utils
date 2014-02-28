@@ -39,8 +39,9 @@ totalsFile=$totalsDir/$(basename $bigWig .bw).tot
 
 # Extract the total signal of the bigWig
 total=$(awk 'END{print $NF}' $totalsFile)
-bigWigToBedGraph $bigWig stdout | awk -v total=$total '{$4=$4/total*10^9;print}' > $(basename $bigWig .bw).bedGraph
-bedGraphToBigWig $(basename $bigWig .bw).bedGraph $chromSizes $normDir/$(basename $bigWig .bw).norm.bw
-rm $(basename $bigWig .bw).bedGraph
+bn=$(basename $(basename $bigWig .bw) .bigwig)
+bigWigToBedGraph $bigWig stdout | awk -v total=$total '{$4=$4/total*10^9;print}' > ${bn}.bedGraph
+bedGraphToBigWig ${bn}.bedGraph $chromSizes $normDir/${bn}.norm.bw
+rm ${bn}.bedGraph
 
 exit 0

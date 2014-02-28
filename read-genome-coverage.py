@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-# *** Oct. 24th, 2013 ***
+# *** Feb. 28th, 2014 ***
 from argparse import ArgumentParser, FileType
 from datetime import datetime
 import subprocess as sp
@@ -17,6 +17,12 @@ from os import path, remove
 # - intergenic
 all_bed = ""
 
+def strfdelta(tdelta, fmt):
+    d = {"days": tdelta.days}
+    d["hours"], rem = divmod(tdelta.seconds, 3600)
+    d["minutes"], d["seconds"] = divmod(rem, 60)
+    return fmt.format(**d)
+
 def grouper_nofill(n, iterable):
     '''list(grouper_nofill(3, 'ABCDEFG')) --> [['A', 'B', 'C'], ['D', 'E', 'F'], ['G']]
     '''
@@ -29,15 +35,17 @@ def grouper_nofill(n, iterable):
 
 def project(element):
     '''element can be one of <gene> <exon>'''
+    import logging
+    log = logging.getLogger('gencov')
     merged_element = bn_bam + "." + bn_gtf + "." + element + ".merged.bed"
     if path.exists(merged_element):
-        print element, "merged bed already exists"
+        log.warning("%s merged bed already exists" % element.title())
     else:
         sp.call("awk '$3 == \"%s\"' %s | sort -k1,1 -k4,4n | mergeBed -i stdin | awk 'BEGIN{OFS=\"\t\"}{$(NF+1)=\"%s\";print}' > %s" %(element, args.annotation, element, merged_element), shell=True)
-        print datetime.now(), element, "merged."
+        log.info("%s merged" % element.title())
     return merged_element
 
-def count_features(q, r):
+def count_features(q,r):
     while True:
         # Initialize
         newRead = False     # keep track of different reads
@@ -49,9 +57,8 @@ def count_features(q, r):
         split_counts = {}   # Split read counts
         tot_counts = {}      # Total number of reads
 
-
         command = "intersectBed -a stdin -b %s -split -wao" % (all_bed)
-        out = sp.Popen(command, shell=True, stdout=sp.PIPE, stdin=sp.PIPE)
+        out = sp.Popen(command, shell=True, stdout=sp.PIPE, stdin=sp.PIPE, bufsize=0)
 
         bed_lines = q.get()
         o = iter(out.communicate(''.join(bed_lines))[0].split('\n'))
@@ -111,6 +118,9 @@ def count_features(q, r):
 if __name__ == "__main__":
     # ------------------ ARGUMENT PARSING -------------------
 
+    import itertools
+    import sys
+    import logging
 
     parser = ArgumentParser(description = "Count the number of reads in genomic regions. Requires 6 CPUs")
     parser.add_argument("-a", "--annotation", type=str, help="gtf with all elements (genes, transcripts and exons)")
@@ -120,52 +130,59 @@ if __name__ == "__main__":
     parser.add_argument("-I", "--ID", type=str, help="the ID of the experiment, from which the bam comes from")
     parser.add_argument("-p", "--cores", type=int, help="number of CPUs", default=1)
     parser.add_argument("-r", "--records-in-ram", dest='chunk_size', type=int, help="number of records to be put in memory", default=10000)
+    parser.add_argument("--loglevel", dest='loglevel', help="Set the loglevel", default="info")
+
     args = parser.parse_args()
 
-
-    # -------------------PRELIMINARY GTF PARSING -----------------
+    # set up logger
+    log = logging.getLogger("gencov")
+    log.setLevel(logging.getLevelName(args.loglevel.upper()))
+    ch = logging.StreamHandler()
+    ch.setLevel = log.level
+    fmt = logging.Formatter('%(asctime)s - %(message)s', '%Y-%m-%d %H:%M:%S')
+    ch.setFormatter(fmt)
+    log.addHandler(ch)
 
     bn_bam = path.basename(args.bam).rsplit(".", 1)[0]
     bn_gtf = path.basename(args.annotation).rsplit(".", 1)[0]
 
+    start = datetime.now()
+    log.info("Running with %s process%s" % (args.cores, 'es' if args.cores > 1 else ''))
+    log.info("Chunk size: %s" % args.chunk_size)
 
-    print datetime.now()
+    # -------------------PRELIMINARY GTF PARSING -----------------
+    log.info("Parsing annotation...")
 
-    # Exon projections
-    merged_exons = project("exon")
-
-    # Gene projections
-    merged_genes = project("gene")
+    pool = MP.Pool(processes=args.cores)
+    # Exon and gene projections
+    features = ('exon', 'gene')
+    merged_exons, merged_genes = pool.map(project, features)
+    pool.close()
+    pool.join()
 
     # Introns
     intron_bed = bn_bam + "." + bn_gtf + ".intron.bed"
     if path.exists(intron_bed):
-        print "Intron bed already exists"
+        log.warn( "Intron bed already exists")
     else:
         sp.call("subtractBed -a %s -b %s | awk 'BEGIN{OFS=\"\t\"}{$(NF)=\"intron\";print}' > %s" %(merged_genes, merged_exons, intron_bed), shell=True)
-        print datetime.now(), "intron extracted."
+        log.info("Intron extracted")
 
     # Intergenic
     intergenic_bed = bn_bam + "." + bn_gtf + ".intergenic.bed"
     if path.exists(intergenic_bed):
-        print "Intergenic bed already exists"
+        log.warn("Intergenic bed already exists")
     else:
         sp.call("complementBed -i %s -g %s | awk 'BEGIN{OFS=\"\t\"}{$(NF+1)=\"intergenic\";print}' > %s" %(merged_genes, args.genome, intergenic_bed), shell=True)
-        print datetime.now(), "intergenic extracted"
+        log.info("Intergenic extracted")
 
     all_bed = bn_bam + "." + bn_gtf + ".all.bed"
     sp.call("cat %s %s %s %s > %s" %(merged_exons, merged_genes, intron_bed, intergenic_bed, all_bed), shell=True)
-    print datetime.now(), "cat all bed"
-
+    log.info("Cat all bed files...")
 
     ## -----------------------------------------------------------------------------------
 
-    bed = sp.Popen("samtools view -b -F 260 %s | bamToBed -i stdin -cigar -bed12" %(args.bam), shell=True, stdout=sp.PIPE)
-
-    import itertools
-    import sys
-    print "Running with %s processes" % args.cores
-    print "Chunk size:", args.chunk_size
+    bed = sp.Popen("samtools view -b -F 260 %s | bamToBed -i stdin -cigar -bed12" %(args.bam), shell=True, stdout=sp.PIPE, bufsize=1)
 
     q = MP.JoinableQueue()
     r = MP.Queue()
@@ -173,22 +190,24 @@ if __name__ == "__main__":
     for i in range(args.cores):
         p = MP.Process(target=count_features,args=(q, r))
         p.daemon = True
-        #print "Starting", p.name
         p.start()
+        log.debug("{0} started".format(p.name))
 
+    log.info("Compute stats...")
     for chunk in grouper_nofill(args.chunk_size, bed.stdout):
         q.put(chunk)
 
     q.join()
 
-    ## ------------------------ GATHER RESULTS ---------------------------------------
+    ## ------------------------ COLLECT RESULTS ---------------------------------------
+    log.info("Collect results...")
 
     tot = {}
     cont = {}
     split = {}
 
     while not r.empty():
-        t, c, s = r.get()
+        t,c,s = r.get()
         for k,v in t.items():
             tot[k] = tot.get(k,0) + v
         for k,v in c.items():
@@ -200,18 +219,24 @@ if __name__ == "__main__":
     ## ------------------------ WRITE OUTPUT TO FILE ---------------------------------------
 
     out = args.output
+
     summary_d = {"total" : tot, "continuous" : cont, "split" : split}
+    if not args.ID:
+        from os.path import basename
+        args.ID = basename(args.bam)
     for k, v in summary_d.iteritems():
         for k1, v1 in v.iteritems():
             line_array = [args.ID, k, str(k1), str(v1)]
             out.write("\t".join(line_array)+"\n")
+
+    out.close()
 #    import json
 #    out.write('Total reads: %s\n' % json.dumps(tot, indent=4))
 #    out.write('Continuous reads: %s\n' % json.dumps(cont, indent=4))
 #    out.write('Split reads: %s\n' % json.dumps(split, indent=4))
 
-    print datetime.now()
-    print 'DONE'
+    end = datetime.now() - start
+    log.info('DONE (%s)' % strfdelta(end, "{hours}h{minutes}m{seconds}s"))
 
     for f in (merged_exons, merged_genes, intron_bed, intergenic_bed, all_bed):
         remove(f)

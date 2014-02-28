@@ -62,10 +62,12 @@ def checkJunction(junction):
 
 
 
-ssj = BT.BedTool(args.ssj)
+#ssj = BT.BedTool(args.ssj)
 a = BT.BedTool("\n".join(checkJunction(junction) for junction in gjunction.keys()), from_string=True)
 
-a.window(ssj, w=args.window).saveas("test.windowBed")
+a.saveas("splice-sites.bed")
+
+#a.window(ssj, w=args.window).saveas("test.windowBed")
 
 
 

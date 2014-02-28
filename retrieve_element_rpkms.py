@@ -13,7 +13,7 @@ parser.add_option("-I", "--input", dest="input", default="stdin",
 	help="The name of the input file. The input format can be either a dashboard index file or a list of gff/gtf. leave empty for stdin.")
 parser.add_option("-d", "--output_dir", dest="output_dir", help="the folder where you want to store the output file", default="./")
 parser.add_option('-o','--output',dest='output',help='output file additional tags',default='encode',metavar='encode')
-parser.add_option('-O','--organism',dest='organism',help='human or mouse',metavar='')
+parser.add_option('-O','--organism',dest='organism',help='human or mouse',metavar='', default="human")
 parser.add_option('-i','--idr',dest='idr',help='select idr threshold in the interval [0,1]. A threshold of 1 means no filtering.', default="0.1", metavar='0.1')
 parser.add_option('-t','--thr',dest='thr',help='lower threshold for value',default="0", metavar='0')
 parser.add_option('-f','--frac_cov',dest='frac_cov',help='region covered at least',default="0", metavar='0')
@@ -26,13 +26,14 @@ parser.add_option('-n','--names', default="labExpId",
 	help='The metadata you want to include in the header (comma-separated). Choose "NA" for using the file name')
 parser.add_option('-r','--replicates', default=False, action='store_true', help='use this if you want to use only replicates')
 parser.add_option('-v','--value', default='rpkm', help='choose the values (comma-separated)\
- you want to extract: <reads>, <RPKM>, <COSI>, <incRatio>', metavar='')
+ you want to extract: it must be a valid gff tag', metavar='')
 options, args = parser.parse_args()
 
 #output = "%s/%s.%s.%s.%s.idr_%s.thr_%s.names_%s.tsv" %(options.output_dir, options.output,
 #options.organism, options.element, options.value, ''.join(options.idr.split('.')), ''.join(options.thr.split('.')), options.names)
+idr_tag = "NA" if not options.replicates else ''.join(options.idr.split('.'))
 output = "%s/%s.%s.%s.%s.idr_%s.thr_%s.tsv" %(options.output_dir, options.output,
-options.organism, options.element, options.value, ''.join(options.idr.split('.')), ''.join(options.thr.split('.')))
+options.organism, options.element, options.value, idr_tag, ''.join(options.thr.split('.')))
 
 ## FUNCTIONS
 
@@ -43,14 +44,15 @@ def mean(array):
 # Read options
 # ============
 
-if options.value == 'rpkm' or options.value == 'cosi':
-	options.value = options.value.upper()
+#if options.value == 'rpkm':
+#	options.value = options.value.upper()
 
 ##------------------------------------------------------------------------------------------------------------------------------------
 ## BEGIN
 
 d = {}
 cell_lines = set()
+features = set()
 
 open_input = sys.stdin if options.input == "stdin" else open(options.input)
 	
@@ -77,6 +79,9 @@ for line in open_input:
 		my_open = open
 	for line in my_open(fname):
 		chr, ann, segment, start, end, dot1, strand, dot2, tags = line.strip(';\n').split('\t')
+		if options.element != segment:
+			features.add(segment)
+			continue
 		if ann == 'Cufflinks':
 			continue
 		if 'cuff' in tags.lower():
@@ -119,6 +124,9 @@ for line in open_input:
 
 ## WRITE OUTPUT
 
+for el in features:
+	sys.stderr.write("The file also contains %ss\n" %el)
+
 f = open(output,'w')
 f.write('\t'.join(sorted(cell_lines))+'\n')
 for element in sorted(d.iterkeys()):
@@ -127,3 +135,5 @@ for element in sorted(d.iterkeys()):
 	missing_value = ",".join(['NA']*len(options.value.split(",")))
 	f.write('\t'.join(str(values.get(cell_line, missing_value)) for cell_line in sorted(cell_lines))+'\n')
 f.close()
+
+
