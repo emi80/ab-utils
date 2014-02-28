@@ -129,7 +129,7 @@ if __name__ == "__main__":
     parser.add_argument("-o", "--output", type=FileType('w'), default=sys.stdout, help="output file name")
     parser.add_argument("-I", "--ID", type=str, help="the ID of the experiment, from which the bam comes from")
     parser.add_argument("-p", "--cores", type=int, help="number of CPUs", default=1)
-    parser.add_argument("-r", "--records-in-ram", dest='chunk_size', type=int, help="number of records to be put in memory", default=10000)
+    parser.add_argument("-r", "--records-in-ram", dest='chunk_size', type=int, help="number of records to be put in memory", default=50000)
     parser.add_argument("--loglevel", dest='loglevel', help="Set the loglevel", default="info")
 
     args = parser.parse_args()
