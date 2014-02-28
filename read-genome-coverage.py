@@ -6,7 +6,8 @@ from datetime import datetime
 import subprocess as sp
 import multiprocessing as MP
 import sys
-from os import path, remove
+import os
+import traceback
 
 # Take only the primary alignments
 
@@ -38,7 +39,7 @@ def project(element):
     import logging
     log = logging.getLogger('gencov')
     merged_element = bn_bam + "." + bn_gtf + "." + element + ".merged.bed"
-    if path.exists(merged_element):
+    if os.path.exists(merged_element):
         log.warning("%s merged bed already exists" % element.title())
     else:
         sp.call("awk '$3 == \"%s\"' %s | sort -k1,1 -k4,4n | mergeBed -i stdin | awk 'BEGIN{OFS=\"\t\"}{$(NF+1)=\"%s\";print}' > %s" %(element, args.annotation, element, merged_element), shell=True)
@@ -131,6 +132,7 @@ if __name__ == "__main__":
     parser.add_argument("-p", "--cores", type=int, help="number of CPUs", default=1)
     parser.add_argument("-r", "--records-in-ram", dest='chunk_size', type=int, help="number of records to be put in memory", default=50000)
     parser.add_argument("--loglevel", dest='loglevel', help="Set the loglevel", default="info")
+    parser.add_argument("--keep", dest='keep', help="Do not delete the temporary files generated during the run", action='store_true', default=False)
 
     args = parser.parse_args()
 
@@ -143,8 +145,8 @@ if __name__ == "__main__":
     ch.setFormatter(fmt)
     log.addHandler(ch)
 
-    bn_bam = path.basename(args.bam).rsplit(".", 1)[0]
-    bn_gtf = path.basename(args.annotation).rsplit(".", 1)[0]
+    bn_bam = os.path.basename(args.bam).rsplit(".", 1)[0]
+    bn_gtf = os.path.basename(args.annotation).rsplit(".", 1)[0]
 
     start = datetime.now()
     log.info("Running with %s process%s" % (args.cores, 'es' if args.cores > 1 else ''))
@@ -162,7 +164,7 @@ if __name__ == "__main__":
 
     # Introns
     intron_bed = bn_bam + "." + bn_gtf + ".intron.bed"
-    if path.exists(intron_bed):
+    if os.path.exists(intron_bed):
         log.warn( "Intron bed already exists")
     else:
         sp.call("subtractBed -a %s -b %s | awk 'BEGIN{OFS=\"\t\"}{$(NF)=\"intron\";print}' > %s" %(merged_genes, merged_exons, intron_bed), shell=True)
@@ -170,7 +172,7 @@ if __name__ == "__main__":
 
     # Intergenic
     intergenic_bed = bn_bam + "." + bn_gtf + ".intergenic.bed"
-    if path.exists(intergenic_bed):
+    if os.path.exists(intergenic_bed):
         log.warn("Intergenic bed already exists")
     else:
         sp.call("complementBed -i %s -g %s | awk 'BEGIN{OFS=\"\t\"}{$(NF+1)=\"intergenic\";print}' > %s" %(merged_genes, args.genome, intergenic_bed), shell=True)
@@ -182,9 +184,27 @@ if __name__ == "__main__":
 
     ## -----------------------------------------------------------------------------------
 
+    bam = args.bam
     chrs = " ".join(sorted([ l.split()[0] for l in open(args.genome) ]))
 
-    bed = sp.Popen("samtools view -b -F 260 %s %s | bamToBed -i stdin -cigar -bed12" %(args.bam, chrs), shell=True, stdout=sp.PIPE, bufsize=1)
+    if not os.path.exists("{0}.bai".format(args.bam)):
+        try:
+            tmpbam = os.path.join(os.environ.get("TMPDIR","/tmp"), os.path.basename(bam))
+            if not os.path.exists(tmpbam):
+                log.debug("Create symlink to {0} in {1}".format(bam, os.path.dirname(tmpbam)))
+                os.symlink(os.path.abspath(bam), tmpbam)
+            bam = tmpbam
+        except Exception,err:
+            log.error("Error indexing the bamfile:")
+            errinfo = traceback.format_exception(sys.exc_type, sys.exc_value, sys.exc_traceback)
+            log.error("".join(errinfo))
+        else:
+            log.debug("Index {0}".format(bam))
+            sp.call('samtools index {0}'.format(bam), shell=True)
+
+    log.debug('Reading {0}'.format(bam))
+    log.debug("samtools view -b -F 260 %s %s | bamToBed -i stdin -cigar -bed12" %(bam, chrs))
+    bed = sp.Popen("samtools view -b -F 260 %s %s | bamToBed -i stdin -cigar -bed12" %(bam, chrs), shell=True, stdout=sp.PIPE, bufsize=1)
 
     q = MP.JoinableQueue()
     r = MP.Queue()
@@ -240,8 +260,9 @@ if __name__ == "__main__":
     end = datetime.now() - start
     log.info('DONE (%s)' % strfdelta(end, "{hours}h{minutes}m{seconds}s"))
 
-    for f in (merged_exons, merged_genes, intron_bed, intergenic_bed, all_bed):
-        remove(f)
+    if not args.keep:
+        for f in (merged_exons, merged_genes, intron_bed, intergenic_bed, all_bed):
+            os.remove(f)
 
     exit()
 
