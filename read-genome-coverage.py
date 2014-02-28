@@ -182,7 +182,9 @@ if __name__ == "__main__":
 
     ## -----------------------------------------------------------------------------------
 
-    bed = sp.Popen("samtools view -b -F 260 %s | bamToBed -i stdin -cigar -bed12" %(args.bam), shell=True, stdout=sp.PIPE, bufsize=1)
+    chrs = " ".join(sorted([ l.split()[0] for l in open(args.genome) ]))
+
+    bed = sp.Popen("samtools view -b -F 260 %s %s | bamToBed -i stdin -cigar -bed12" %(args.bam, chrs), shell=True, stdout=sp.PIPE, bufsize=1)
 
     q = MP.JoinableQueue()
     r = MP.Queue()
