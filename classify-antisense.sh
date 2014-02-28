@@ -11,6 +11,7 @@ if [ $# != 2 ]; then
 echo ""
 echo "USAGE: $0 sense.gtf antisense.gtf"
 echo "Note: The first field in the gtf tags must be the gene id"
+echo "One of the two files can be piped in stdin. For that write \"stdin\" as file name"
 echo ""
 exit 1
 fi
