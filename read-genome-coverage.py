@@ -123,7 +123,7 @@ if __name__ == "__main__":
     import sys
     import logging
 
-    parser = ArgumentParser(description = "Count the number of reads in genomic regions. Requires 6 CPUs")
+    parser = ArgumentParser(description = "Count the number of reads in genomic regions.")
     parser.add_argument("-a", "--annotation", type=str, help="gtf with all elements (genes, transcripts and exons)")
     parser.add_argument("-g", "--genome", type=str, help="genome chromosome sizes")
     parser.add_argument("-b", "--bam", type=str, help="bam file")
