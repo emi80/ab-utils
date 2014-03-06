@@ -62,6 +62,11 @@ def count_features(q,r):
         out = sp.Popen(command, shell=True, stdout=sp.PIPE, stdin=sp.PIPE, bufsize=0)
 
         bed_lines = q.get()
+
+        if bed_lines == "DONE":
+            q.task_done()
+            break
+
         o = iter(out.communicate(''.join(bed_lines))[0].split('\n'))
 
         # Iterate
@@ -115,6 +120,7 @@ def count_features(q,r):
         #   break
         r.put((tot_counts, cont_counts, split_counts))
         q.task_done()
+    r.put("DONE")
 
 if __name__ == "__main__":
     # ------------------ ARGUMENT PARSING -------------------
@@ -209,8 +215,11 @@ if __name__ == "__main__":
     q = MP.JoinableQueue()
     r = MP.Queue()
 
+    procs = []
+
     for i in range(args.cores):
         p = MP.Process(target=count_features,args=(q, r))
+        procs.append(p)
         p.daemon = True
         p.start()
         log.debug("{0} started".format(p.name))
@@ -218,8 +227,11 @@ if __name__ == "__main__":
     log.info("Compute stats...")
     for chunk in grouper_nofill(args.chunk_size, bed.stdout):
         q.put(chunk)
+    for i in range(args.cores):
+        q.put("DONE")
 
     q.join()
+
 
     ## ------------------------ COLLECT RESULTS ---------------------------------------
     log.info("Collect results...")
@@ -228,8 +240,19 @@ if __name__ == "__main__":
     cont = {}
     split = {}
 
-    while not r.empty():
-        t,c,s = r.get()
+    proc_count = 0
+
+    while True:
+        item = r.get()
+
+        # check if all processes finished
+        if item == "DONE":
+            proc_count += 1
+            if proc_count == args.cores:
+                break
+            continue
+
+        t,c,s = item
         for k,v in t.items():
             tot[k] = tot.get(k,0) + v
         for k,v in c.items():
