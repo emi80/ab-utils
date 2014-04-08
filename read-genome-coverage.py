@@ -129,7 +129,7 @@ if __name__ == "__main__":
     import sys
     import logging
 
-    parser = ArgumentParser(description = "Count the number of reads in genomic regions.")
+    parser = ArgumentParser(description = "Count the number of reads in genomic regions. NOTE: SAMtools and BAMtools must be installed and the BAM index must be present")
     parser.add_argument("-a", "--annotation", type=str, help="gtf with all elements (genes, transcripts and exons)")
     parser.add_argument("-g", "--genome", type=str, help="genome chromosome sizes")
     parser.add_argument("-b", "--bam", type=str, help="bam file")
@@ -138,6 +138,7 @@ if __name__ == "__main__":
     parser.add_argument("-p", "--cores", type=int, help="number of CPUs", default=1)
     parser.add_argument("-r", "--records-in-ram", dest='chunk_size', type=int, help="number of records to be put in memory", default=50000)
     parser.add_argument("--loglevel", dest='loglevel', help="Set the loglevel", default="info")
+    parser.add_argument("--uniq", dest='uniq', action='store_true', help="Only use uniquely mapped reads", default=False)
     parser.add_argument("--keep", dest='keep', help="Do not delete the temporary files generated during the run", action='store_true', default=False)
 
     args = parser.parse_args()
@@ -209,8 +210,12 @@ if __name__ == "__main__":
             sp.call('samtools index {0}'.format(bam), shell=True)
 
     log.debug('Reading {0}'.format(bam))
-    log.debug("samtools view -b -F 260 %s %s | bamToBed -i stdin -cigar -bed12" %(bam, chrs))
-    bed = sp.Popen("samtools view -b -F 260 %s %s | bamToBed -i stdin -cigar -bed12" %(bam, chrs), shell=True, stdout=sp.PIPE, bufsize=1)
+    command = "samtools view -b -F 260 {0} {1}".format(bam, chrs)
+    if args.uniq:
+        command = "{0} | bamtools filter -tag NH:1".format(command)
+    command = "{0} | bamToBed -i stdin -cigar -bed12".format(command)
+    log.debug(command)
+    bed = sp.Popen(command, shell=True, stdout=sp.PIPE, bufsize=1)
 
     q = MP.JoinableQueue()
     r = MP.Queue()
