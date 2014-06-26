@@ -74,6 +74,13 @@ for (pair in pairs){
 	gn2_end=gnend[ar[2]]
 	strand1=strand[ar[1]]
 	strand2=strand[ar[2]]
+	
+# Add the pair to a list so repeated pairs are not shown
+	if (pair_list[ar[1]"_"ar[2]] == "") {
+		pair_list[ar[1]"_"ar[2]] = pair_list[ar[2]"_"ar[1]] = 1
+	} else {
+		continue
+	}
 
 # debug
 #	if (ar[1]=="ENSG00000162385.6") { print "A", gn1_start, gn1_end, gn2_start, gn2_end}
