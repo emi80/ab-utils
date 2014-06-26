@@ -29,7 +29,6 @@ intersectBed -a $file1 -b $file2 -wo -S |\
 awk -v gtf1=$file1 -v gtf2=$file2 'BEGIN{OFS="\t"; FS="\t"
 # read start and end for genes in the first exon proj file
 while(getline<gtf1>0){
-#gene=$10;split(gene,a,"\"");
 split($9, tags, "; "); gene=tags[1]; split(gene,a,"\"");
 
 gnstart[a[2]] = (gnstart[a[2]]=="" ? $4 : min(gnstart[a[2]],$4))
@@ -38,7 +37,6 @@ strand[a[2]] = $7
 	}
 # read start and end for genes in the second exon proj file
 while(getline<gtf2>0){
-#gene=$10;split(gene,a,"\"");
 split($9, tags, "; "); gene=tags[1]; split(gene,a,"\"");
 gnstart[a[2]] = (gnstart[a[2]]=="" ? $4 : min(gnstart[a[2]],$4))
 gnend[a[2]] = (gnend[a[2]]=="" ? $5 : max(gnend[a[2]],$5))
@@ -51,13 +49,12 @@ function min(x,y){return (x<=y) ? x : y;}
 
 {
 # extract gene names
-#split($10,a,"\"");split($20,b,"\"");gn1=a[2];gn2=b[2];
 split($9,a,"; "); split($18,b,"; "); 
 split(a[1],a1,"\""); split(b[1], b1, "\"");
 gn1=a1[2];gn2=b1[2];
 pairs[gn1,gn2]
 # extract the length of the intersection
-ovlap = $NF
+ovlap[gn1,gn2] += $NF
 # take the min start1
 if(start1[gn1,gn2]==""){start1[gn1,gn2]=(start1[gn1,gn2]>$4?$4:start1[gn1,gn2])}
 # take the min start2
@@ -85,26 +82,26 @@ for (pair in pairs){
 # -- Conditions on relative posisions --
 
 	if (strand1 == "+" && strand2 == "-") { 
-# 5 head to head
+# === 5 head to head ===
 		if (gn2_start<gn1_start && gn1_start<gn2_end && gn1_end>gn2_end) {class[pair]="5head-to-head"}
-# 3 tail to tail
+# === 3 tail to tail ===
 		if (gn2_end>gn1_end && gn2_start>gn1_start && gn2_start<=gn1_end) {class[pair]="3tail-to-tail"}
 		}
 
 	if (strand1 == "-" && strand2 == "+") { 
-# 5 head to head
+# === 5 head to head ===
 		if (gn2_start<gn1_start && gn1_start<=gn2_end && gn1_end>gn2_end) {class[pair]="3tail-to-tail"}
-# 3 tail to tail
+# === 3 tail to tail ===
 		if (gn2_end>gn1_end && gn2_start>gn1_start && gn2_start<=gn1_end) {class[pair]="5head-to-head"}
 		}
 
 
-# Internal intronic
+# === Internal intronic ===
 	if (gn2_start>=gn1_start && gn2_start<gn1_end && gn2_end>gn1_start && gn2_end<=gn1_end) {class[pair]="internal"}
-# External exonic
+# === External exonic ===
 	if (gn2_start<=gn1_start && gn2_end>=gn1_end) {class[pair]="external"}
 
-	print ar[1],gn1_start,gn1_end,strand1, ar[2],gn2_start,gn2_end,strand2, class[pair]
+	print ar[1],gn1_start,gn1_end,strand1, ar[2],gn2_start,gn2_end,strand2, class[pair], ovlap[pair]
 	}
 }'
 
