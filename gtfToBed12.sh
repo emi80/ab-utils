@@ -16,7 +16,7 @@ gtf=$1
 # To create a BED12 from a GTF
 # 1) convert gtf to GenePred (If an entire gtf is given it will report all the genes as errors as it
 # considers only transcripts)
-~abreschi/bioprogs/Jim_Kent_source_tree/gtfToGenePred $gtf -allErrors $(basename $gtf .gtf).GenePred 2> gtfToGenePred.stderr
+~abreschi/bioprogs/Jim_Kent_source_tree/gtfToGenePred $gtf -allErrors $(dirname $gtf)/$(basename $gtf .gtf).GenePred 2> gtfToGenePred.stderr
 # 2) convert GenePred to Bed
 cat $(basename $gtf .gtf).GenePred | ~abreschi/bioprogs/Jim_Kent_source_tree/genePredToBed12 > $(dirname $gtf)/$(basename $gtf .gtf).bed12
 
