@@ -18,7 +18,7 @@ gtf=$1
 # considers only transcripts)
 ~abreschi/bioprogs/Jim_Kent_source_tree/gtfToGenePred $gtf -allErrors $(dirname $gtf)/$(basename $gtf .gtf).GenePred 2> gtfToGenePred.stderr
 # 2) convert GenePred to Bed
-cat $(basename $gtf .gtf).GenePred | ~abreschi/bioprogs/Jim_Kent_source_tree/genePredToBed12 > $(dirname $gtf)/$(basename $gtf .gtf).bed12
+cat $(dirname $gtf)/$(basename $gtf .gtf).GenePred | ~abreschi/bioprogs/Jim_Kent_source_tree/genePredToBed12 > $(dirname $gtf)/$(basename $gtf .gtf).bed12
 
 rm gtfToGenePred.stderr
 
