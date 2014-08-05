@@ -6,8 +6,8 @@ parser = argparse.ArgumentParser()
 parser = argparse.ArgumentParser(description='Process some integers.')
 parser.add_argument("-a", "--file1", type=str, help="file name or stdin. This is the file that is stored in memory")
 parser.add_argument("-b", "--file2", type=str, help="file name or stdin")
-parser.add_argument("-x", type=str, help="index of the field you want file a to be joined on. Accept multiple indeces comma-separated")
-parser.add_argument("-y", type=str, help="index of the field you want file b to be joined on. Accept multiple indeces comma-separated")
+parser.add_argument("-x", type=str, default="1", help="index of the field you want file a to be joined on. Accept multiple indeces comma-separated")
+parser.add_argument("-y", type=str, default="1", help="index of the field you want file b to be joined on. Accept multiple indeces comma-separated")
 parser.add_argument("--a_header", action="store_true", help="file \"a\" has a header")
 parser.add_argument("--b_header", action="store_true", help="file \"b\" has a header")
 args = parser.parse_args()
@@ -30,13 +30,15 @@ file2 = sys.stdin if args.file2 == "stdin" else open(args.file2)
 
 d = {}
 for i,line in enumerate(file1):
+	if line.strip() == "":
+		continue
 	if args.a_header:
 		if i == 0:
 			h1 = "\t".join((el for i,el in enumerate(line.strip().split("\t")) if i+1 not in x_indeces))
 			continue
 	line_sp = line.strip().split("\t")
 	x_fields = len(line_sp) - len(x_indeces)
-	k = "_".join(list(line_sp[x_index-1] for x_index in x_indeces))
+	k = "_".join(list(line_sp[x_index-1].strip() for x_index in x_indeces))
 	d[k] = "\t".join((el for i,el in enumerate(line.strip().split("\t")) if i+1 not in x_indeces))
 
 
@@ -44,6 +46,8 @@ for i,line in enumerate(file1):
 # @@@ READ FILE2 AND INTERSECT WITH FILE1 @@@
 
 for i,line in enumerate(file2):
+	if line.strip() == "":
+		continue
 	line_sp = line.strip().split("\t")
 	if args.b_header and args.a_header:
 		if i == 0:
@@ -64,11 +68,10 @@ for i,line in enumerate(file2):
 		if i == 0:
 			h1 = "\t".join(("V"+str(n+1) for n in range(len(line_sp)+1, x_fields)))
 			h2 = "\t".join(("V"+str(n+1) for n in range(len(line_sp))))
-			print "%s\t%s" %(h2,h1)
+#			print "%s\t%s" %(h2,h1)
 	k = "_".join(list(line_sp[y_index-1] for y_index in y_indeces))
 	if d.has_key(k):
 		print "%s\t%s" %(line.strip(), d[k])
-
 
 
 
