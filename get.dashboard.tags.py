@@ -10,6 +10,7 @@ if len(sys.argv) != 3:
 	print "<tags> should be valid gtf keys in the 9th field, comma-separated"
 	exit()
 
+bn = sys.argv[0].split("/")[-1].replace(".py", "")
 
 input = sys.stdin if sys.argv[1] == "-" else open(sys.argv[1])
 
@@ -17,7 +18,15 @@ input = sys.stdin if sys.argv[1] == "-" else open(sys.argv[1])
 which = sys.argv[2].split(",")
 for line in input:
 	f,m = line.strip().strip(";").split("\t")
-	d = dict(el.split("=") for el in m.split("; "))
+	if m.startswith("#"):
+		continue
+	try: 
+		d = dict(el.split("=") for el in m.split("; "))
+	except:
+		logF = open(bn+".log", "a")
+		logF.write(line)
+		logF.close()
+		continue
 	l = []
 	for w in which:
 		if w=="path":
