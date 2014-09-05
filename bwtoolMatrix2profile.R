@@ -11,14 +11,20 @@ suppressPackageStartupMessages(library("optparse"))
 
 option_list <- list(
 
-make_option(c('-i', '--input'), type="character", help='Input matrix. Can be <stdin>. A usual matrix has only values, no header and no row name'),
+make_option(c('-i', '--input'), type="character", 
+	help='Input matrix. Can be <stdin>. A usual matrix has only values, no header and no row name'),
+
 #make_option(c('-r', '--row_names'), type="numeric", help='Index of the column with the row names. Leave empty for no row names.'),
+make_option(c('-o', '--output'), type="character", default='stdout',
+	help='Output file name with extension. Can be <stdout>. [default=%default]'),
 
 make_option(c('-a', '--aggregate_by'), type="numeric", 
 	help='Index of the column with the factor to aggregate by. Leave empty for no factor.'),
 
-make_option(c('-f', '--func'), type="character", default='mean', help='Aggregating function [default=%default]'),
-make_option(c('-n', '--offset'), type="numeric", default=1000, help='Offset [default=%default]'),
+make_option(c('-f', '--func'), type="character", default='mean', 
+	help='Aggregating function [default=%default]'),
+
+make_option(c('-n', '--offset'), type="numeric", default=0, help='Offset [default=%default]'),
 make_option(c('-v', '--verbose'), action='store_true', default=FALSE, help='Verbose output [default=%default]')
 
 )
@@ -70,17 +76,23 @@ if (!is.null(opt$aggregate_by)) {
 # Melt the data
 if (!is.null(opt$aggregate_by)) {
 	mm = melt(agg, id.vars=factor_col, variable.name=c('position'))
+	# Reorder column
+	mm <- mm[c(2,3,1)]
 } else {
 	mm = data.frame(position=names(agg), value=agg)
 }
 
 # Read the offset and edit the position column accordingly
 offset = opt$offset
-mm$position <- seq(1, nrow(mm)) - offset
+new_lev = seq_along(levels(mm$position)) - offset
+levels(mm$position) <- new_lev
 
-print(head(mm))
-print(tail(mm))
+#~~~~~~~~~~~~
+# OUTPUT
+#~~~~~~~~~~~~
 
+output = ifelse(opt$output=='stdout', "", opt$output)
+write.table(mm, file=output, quote=FALSE, sep="\t", row.names=FALSE, col.names=TRUE)
 
 q(save='no')
 
