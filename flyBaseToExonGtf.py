@@ -32,7 +32,7 @@ valid_chr = [
 	]
 
 
-GENES, EXONS, TRANSCRIPTS = {}, {}, {}
+GENES, EXONS, CDS, TRANSCRIPTS = {}, {}, {}, {}
 exon_gene_ids, tx_gene_ids = set(), {}
 gene_types = {}
 
@@ -64,11 +64,36 @@ for line in open(args.input):
 		# Very few exons have the same name but different coordinates. 
 		# Use both the coordinates and the name to have a unique identifier
 		EXONS[";".join((coords, tags_d["Name"]))] = line
+	if element == "CDS":
+		CDS[";".join((coords, tags_d["Name"]))] = line
 	if element in transcript_types:
 		TRANSCRIPTS[tags_d["ID"]] = line
 		gene_types.setdefault(tags_d["Parent"], []).append(element)
 
 for exon,line in EXONS.iteritems():
+	line_el = line.strip().split("\t")
+	if line_el[0] == "dmel_mitochondrion_genome":
+		line_el[0] = "M"
+	line_el[0] = "chr" + line_el[0]
+	tags_d = dict(el.split("=") for el in line_el[-1].strip(";").split(";"))
+	transcripts = tags_d["Parent"].split(",")
+	for transcript_id in transcripts:
+		transcript_line = TRANSCRIPTS[transcript_id]
+		transcript_el = transcript_line.strip().split("\t")
+		tx_tags_d = dict(el.split("=") for el in transcript_el[-1].strip(";").split(";"))
+		gene_id = tx_tags_d["Parent"]
+		exon_gene_ids.add(gene_id)
+		transcript_name = tx_tags_d["Name"]
+		transcript_type = transcript_el[2]
+		gene_type = transcript_types[max(transcript_types.index(x) for x in gene_types[gene_id])]
+		gene_line = GENES[gene_id]
+		gene_el = gene_line.strip().split("\t")
+		gene_tags_d = dict(el.split("=") for el in gene_el[-1].strip(";").split(";"))
+		gene_name = gene_tags_d["Name"]
+		new_tag = 'gene_id "%s"; transcript_id "%s"; gene_name "%s"; transcript_name "%s"; gene_type "%s"; transcript_type "%s";' %(gene_id, transcript_id, gene_name, transcript_name, gene_type, transcript_type)
+		out.write("\t".join(line_el[:-1]+ [new_tag]) + "\n")
+
+for exon,line in CDS.iteritems():
 	line_el = line.strip().split("\t")
 	if line_el[0] == "dmel_mitochondrion_genome":
 		line_el[0] = "M"
