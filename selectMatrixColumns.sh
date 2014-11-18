@@ -44,7 +44,7 @@ NR > 1 {
 	if (offset == 1) {
 		printf $1"\t"
 	}
-	for (i=1+offset;i<NF;i++) {
+	for (i=1+offset;i<=NF;i++) {
 		if (header[i-offset] in sel) {
 			c++
 			if (c==1) {
