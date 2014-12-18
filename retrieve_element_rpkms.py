@@ -128,12 +128,12 @@ for el in features:
 f = open(output,'w') if options.output != "stdout" else sys.stdout
 
 #f = open(output,'w')
-f.write('\t'.join(sorted(cell_lines))+'\n')
+f.write('\t'.join(sorted(cell_lines, key=lambda x: x.lower()))+'\n')
 for element in sorted(d.iterkeys()):
     values = d[element]
     f.write(element+'\t')
     missing_value = ",".join(['NA']*len(options.value.split(",")))
-    f.write('\t'.join(str(values.get(cell_line, missing_value)) for cell_line in sorted(cell_lines))+'\n')
+    f.write('\t'.join(str(values.get(cell_line, missing_value)) for cell_line in sorted(cell_lines, key=lambda x: x.lower()))+'\n')
 f.close()
 
 
