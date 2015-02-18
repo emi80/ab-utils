@@ -65,7 +65,7 @@ for line in open_input:
         exit()
     if options.names != "NA":
         mdata_names = options.names.split(",")
-        sample = '_'.join(meta.get(v, "NA") for v in mdata_names)
+        sample = '_'.join(meta.get(v, "NA").strip("\"") for v in mdata_names)
     else:
         sample = fname.split("/")[-1]
     cell_lines.add(sample)
