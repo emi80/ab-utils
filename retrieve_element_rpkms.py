@@ -86,7 +86,7 @@ for line in open_input:
         if options.element != segment:
             features.add(segment)
             continue
-        if ann == 'Cufflinks' and 'FPKM' not in options.value.split():
+        if ann == 'Cufflinks' and 'FPKM' not in options.value.upper().split(','):
             continue
         if 'cuff' in tags.lower():
             continue
