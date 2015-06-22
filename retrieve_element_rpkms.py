@@ -20,7 +20,7 @@ parser.add_option('-t','--thr',dest='thr',help='lower threshold for value',defau
 parser.add_option('-f','--frac_cov',dest='frac_cov',help='region covered at least',default="0", metavar='0')
 parser.add_option('-F','--Frac_cov',dest='Frac_cov',help='region covered at most',default="1", metavar='1')
 parser.add_option('-e','--element', dest='element',help='choose the element you want\
- to extract the matrix for: <gene>, <transcript>, <exon>, <intron>',metavar='')
+ to extract the matrix for: <gene>, <transcript>, <exon>, <intron> <as_event>',metavar='')
 parser.add_option('-s','--strip_id', dest='strip_id', action='store_true', help='strip the id removing the .[0-9]')
 parser.add_option('-n','--names', default="labExpId",
     help='The metadata you want to include in the header (comma-separated). Choose "NA" for using the file name')
@@ -88,22 +88,24 @@ for line in open_input:
             element_id = tags['transcript_id'].strip('"')
         elif options.element == 'exon' or options.element == 'intron':
             element_id = '_'.join((chr, start, end, strand))
+        elif options.element == "as_event":
+            element_id = "_".join((chr,start,end,strand,tags["splice_chain"].strip('"')))
         else:
             element_id = tags['gene_id'].strip('"')
         if options.strip_id: element_id = element_id.split('.')[0]
 
+        idr = tags['iIDR'].strip('"')
+
+        if idr != 'NA' and float(idr) > float(options.idr):
+            element_value = "NA"
+            d.setdefault(element_id, {}).setdefault(sample,element_value)
+            continue
         if options.replicates:
             key1=options.value+"1"
             key2=options.value+"2"
             if not tags.has_key(key1):
                 cell_lines.remove(sample)
                 break
-            idr = tags['iIDR'].strip('"')
-
-            if idr != 'NA' and float(idr) > float(options.idr):
-                element_value = "NA"
-                d.setdefault(element_id, {}).setdefault(sample,element_value)
-                continue
             element_value = mean(map(lambda x: float(x.strip('"')), (tags[key1],tags[key2])))
             if element_value < float(options.thr):
                 element_rpkm = "NA"
