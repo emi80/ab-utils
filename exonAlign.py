@@ -37,6 +37,7 @@ def read_gtf(f, outF):
 			# Write the exons
 			start = int(d[gene_id][i][0])
 			end = int(d[gene_id][i][1])
+			strand = d[gene_id][i][2]
 			if strand == "+":
 				start = start - gene_start
 				end = end - gene_start
@@ -66,7 +67,6 @@ def read_gtf(f, outF):
 
 
 out = "exonAlign.out.tsv"
-#outF = open(out, "w")
 outF = open(out, "w")
 
 gtf = read_gtf(sp.Popen("sort -k 1,1 -k 4,4n " + args.file1, shell=True, stdout=sp.PIPE).stdout, outF)
