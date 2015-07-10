@@ -66,7 +66,7 @@ def gtf_processing(genome=None, prefix='gencov'):
         }
         intron_bed, intergenic_bed = map(preprocess, features[2:], [ins, ins])
 
-        log.info("Concatenate bed files for elements...")
+        log.info("Concatenate bed files for all elements...")
         with open(all_bed, 'w') as out_bed:
             cat_all(merged_exons, merged_genes, intron_bed, intergenic_bed, out_bed=out_bed)
 
@@ -85,7 +85,7 @@ def get_chromosomes(genome_file):
         chrs = " ".join([l.split()[0] for l in genome])
     return chrs
 
-def process_bam(bam, all_elements, chrs=None, uniq=False, all_reads=False):
+def process_bam(bam, all_elements, chrs=None, all_reads=False):
     if not os.path.exists(bam):
         raise IOError("Fail to open {0!r} for reading".format(bam))
     bai = "{0}.bai".format(bam)
@@ -95,14 +95,13 @@ def process_bam(bam, all_elements, chrs=None, uniq=False, all_reads=False):
 
     log.info('Processing {0}...'.format(bam))
     command = "samtools view -u"
+    sam_filter = 4
     if not all_reads:
-        command += " -F 260"
-    command += " {0}".format(bam)    
+        sam_filter += 256
+    command += " -F {0} {1}".format(str(sam_filter), bam)    
     if chrs:
         command += " {0}".format(chrs)
-    if uniq:
-        command = "{0} | bamtools filter -tag NH:1".format(command)
-    command = "{0} | bamToBed -i stdin -cigar -bed12 | intersectBed -a stdin -b {1} -split -wao".format(command, all_elements)
+    command = "{0} | bamToBed -i stdin -tag NH -bed12 | intersectBed -a stdin -b {1} -split -wao".format(command, all_elements)
     log.debug(command)
     return sp.Popen(command, shell=True, stdout=sp.PIPE, stderr=sp.PIPE, bufsize=1)
 
@@ -136,14 +135,14 @@ def update_counts(element, tot_counts, cont_counts, split_counts, is_split):
 
       cont_counts[elem] = cont_counts.get(elem, 0) + 1
 
-def count_features(bed):
+def count_features(bed, uniq=False):
     
     # Initialize
+    n_skipped = {}
     newRead = False     # keep track of different reads
     prev_rid = None     # read id of the previous read
     is_split = False    # check if current read is a split
     element = []        # list with all elements intersecting the read
-    NR = 0              # Row number (like awk)
     cont_counts = {}    # Continuous read counts
     split_counts = {}   # Split read counts
     tot_counts = {}      # Total number of reads
@@ -155,11 +154,15 @@ def count_features(bed):
         try:
             line = o.next()
             if not line:
+                n_skipped['empty'] = n_skipped.get('gene', 0) + 1
                 continue
-            NR += 1
             if 'gene' in line:
+                n_skipped['gene'] = n_skipped.get('gene', 0) + 1
                 continue
             rchr, rstart, rend, rid, rflag, rstrand, rtstart, rtend, rrgb, rbcount, rbsizes, rbstarts, achr, astart, aend, ael, covg = line.strip().split("\t")
+            if uniq and int(rflag) != 1:
+                n_skipped['non-uniq'] = n_skipped.get('non-uniq', 0) + 1
+                continue
             newRead = (rid != prev_rid)
             if (newRead) and prev_rid!=None:
                 update_counts(element, tot_counts, cont_counts, split_counts, is_split)
@@ -173,6 +176,9 @@ def count_features(bed):
             update_counts(element, tot_counts, cont_counts, split_counts, is_split)
             break
 
+    for k,v in n_skipped.iteritems():
+        log.info("Skipped {1} {0} lines".format(k, v))
+
     return (tot_counts, cont_counts, split_counts)
 
 def write_output(stats, out, output_format='tsv', json_indent=4):
@@ -185,9 +191,9 @@ def write_output(stats, out, output_format='tsv', json_indent=4):
                 line_array = [args.ID, k, str(k1), str(v1)]
                 out.write("\t".join(line_array)+"\n")
     elif output_format == 'json':
-        out.write('Total reads: %s\n' % json.dumps(stats['total'], indent=json_indent))
-        out.write('Continuous reads: %s\n' % json.dumps(stats['continuous'], indent=json_indent))
-        out.write('Split reads: %s\n' % json.dumps(stats['split'], indent=json_indent))
+        out.write('Total reads: {0}\n'.format(json.dumps(stats['total'], indent=json_indent)))
+        out.write('Continuous reads: {0}\n'.format(json.dumps(stats['continuous'], indent=json_indent)))
+        out.write('Split reads: {0}\n'.format(json.dumps(stats['split'], indent=json_indent)))
 
 def main(args):
 
@@ -199,16 +205,20 @@ def main(args):
     all_elements = gtf_processing(genome=args.genome, prefix=bn_bam + "." + bn_gtf)
 
     chrs = None if args.all_chrs else get_chromosomes(args.genome)
-    bed = process_bam(args.bam, all_elements, chrs=chrs, uniq=args.uniq)
+    if args.uniq:
+        args.all_reads = False
+    bed = process_bam(args.bam, all_elements, chrs=chrs, all_reads=args.all_reads)
 
-    tot, cont, split = count_features(bed)
+    read_type = "UNIQ" if args.uniq else "ALL" if args.all_reads else "PRIMARY"
+    log.info("Compute genome coverage using {0!r} mapped reads...".format(str(read_type)))
+    tot, cont, split = count_features(bed, uniq=args.uniq)
 
     stats_summary = {"total" : tot, "continuous" : cont, "split" : split}
 
     write_output(stats_summary, args.output, output_format=args.output_format)
 
     end = datetime.now() - start
-    log.info('DONE (%s)' % strfdelta(end, "{hours}h{minutes}m{seconds}s"))
+    log.info('DONE ({0})'.format(strfdelta(end, "{hours}h{minutes}m{seconds}s")))
 
     if not args.keep:
         os.remove(all_elements)
@@ -216,7 +226,7 @@ def main(args):
 def parse_arguments(argv):
     """ Parsing arguments """
 
-    parser = ArgumentParser(argv, description = "Count the number of reads in genomic regions. NOTE: SAMtools and BAMtools must be installed and the BAM index must be present")
+    parser = ArgumentParser(argv, description = "Count the number of reads in genomic regions. NOTE: SAMtools and BEDtools must be installed")
     parser.add_argument("-a", "--annotation", type=str, help="gtf with all elements (genes, transcripts and exons)", required=True)
     parser.add_argument("-g", "--genome", type=str, help="genome chromosome sizes", required=True)
     parser.add_argument("-b", "--bam", type=str, help="bam file", required=True)
