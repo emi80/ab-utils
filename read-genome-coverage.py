@@ -82,7 +82,7 @@ def cat_all(*args, **kwargs):
 
 def get_chromosomes(genome_file):
     with open(genome_file) as genome:
-        chrs = " ".join([l.split()[0] for l in genome])
+        chrs = [l.split()[0] for l in genome]
     return chrs
 
 def process_bam(bam, all_elements, chrs=None, all_reads=False):
@@ -100,7 +100,7 @@ def process_bam(bam, all_elements, chrs=None, all_reads=False):
         sam_filter += 256
     command += " -F {0} {1}".format(str(sam_filter), bam)    
     if chrs:
-        command += " {0}".format(chrs)
+        command += " {0}".format(" ".join(chrs))
     command = "{0} | bamToBed -i stdin -tag NH -bed12 | intersectBed -a stdin -b {1} -split -wao".format(command, all_elements)
     log.debug(command)
     return sp.Popen(command, shell=True, stdout=sp.PIPE, stderr=sp.PIPE, bufsize=1)
@@ -148,6 +148,8 @@ def count_features(bed, uniq=False):
     tot_counts = {}      # Total number of reads
 
     o = bed.stdout
+
+    log.info("Compute genomic coverage...")
 
     # Iterate
     while True:
@@ -210,7 +212,9 @@ def main(args):
     bed = process_bam(args.bam, all_elements, chrs=chrs, all_reads=args.all_reads)
 
     read_type = "UNIQ" if args.uniq else "ALL" if args.all_reads else "PRIMARY"
-    log.info("Compute genome coverage using {0!r} mapped reads...".format(str(read_type)))
+    chroms = ", ".join(chrs) if chrs else "ALL"
+    log.info("Chromosomes: {0}".format(str(chroms)))
+    log.info("Mapped reads: {0}".format(str(read_type)))
     tot, cont, split = count_features(bed, uniq=args.uniq)
 
     stats_summary = {"total" : tot, "continuous" : cont, "split" : split}
