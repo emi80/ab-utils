@@ -14,10 +14,10 @@ from datetime import datetime
 from argparse import ArgumentParser, FileType
 
 PREPROC_CMDS = {
-    'exon': "awk '$3 == \"exon\"' {input[0]} | sort -k1,1 -k4,4n | mergeBed -i stdin | awk 'BEGIN{{OFS=\"\t\"}}{{$(NF+1)=\"exon\";print}}' > {output}",
-    'gene': "awk '$3 == \"gene\"' {input[0]} | sort -k1,1 -k4,4n | mergeBed -i stdin | awk 'BEGIN{{OFS=\"\t\"}}{{$(NF+1)=\"gene\";print}}' > {output}",
-    'intron': "subtractBed -a {input[0]} -b {input[1]} | awk 'BEGIN{{OFS=\"\t\"}}{{$(NF)=\"intron\";print}}' > {output}",
-    'intergenic': "complementBed -i {input[0]} -g {input[1]} | awk 'BEGIN{{OFS=\"\t\"}}{{$(NF+1)=\"intergenic\";print}}' > {output}"
+    'exon': "awk '$3 == \"exon\"' {input[0]} | sort -k1,1 -k4,4n | mergeBed -i stdin | awk 'BEGIN{{OFS=\"\\t\"}}{{$(NF+1)=\"exon\";print}}' > {output}",
+    'gene': "awk '$3 == \"gene\"' {input[0]} | sort -k1,1 -k4,4n | mergeBed -i stdin | awk 'BEGIN{{OFS=\"\\t\"}}{{$(NF+1)=\"gene\";print}}' > {output}",
+    'intron': "subtractBed -a {input[0]} -b {input[1]} | awk 'BEGIN{{OFS=\"\\t\"}}{{$(NF)=\"intron\";print}}' > {output}",
+    'intergenic': "complementBed -i {input[0]} -g <(cut -f 1-2 {input[1]} | sort -k1,1) | awk 'BEGIN{{OFS=\"\\t\"}}{{$(NF+1)=\"intergenic\";print}}' > {output}"
 }
 
 def strfdelta(tdelta, fmt):
@@ -35,8 +35,9 @@ def preprocess(element, inputs=None):
     else:
         inputs = inputs[element]
     command = PREPROC_CMDS[element].format(input=inputs, output=element_bed)
-    
-    proc = sp.Popen(command, shell=True, stderr=sp.PIPE)
+
+    log.debug(command)
+    proc = sp.Popen(command, shell=True, executable='/bin/bash', stderr=sp.PIPE)
     err_msg = proc.communicate()[1]
     if err_msg:
         raise IOError(err_msg)
@@ -45,7 +46,7 @@ def preprocess(element, inputs=None):
     return element_bed
 
 def gtf_processing(genome=None, prefix='gencov'):
-    """Annotation preprocessing. Provide a bed file with the 
+    """Annotation preprocessing. Provide a bed file with the
     following elements:
 
         - projected exons
@@ -77,7 +78,7 @@ def gtf_processing(genome=None, prefix='gencov'):
 
 def cat_all(*args, **kwargs):
     out_bed = kwargs.get('out_bed', sys.stdout)
-    for bed in args:    
+    for bed in args:
       print(open(bed,'r').read(), end='', file=out_bed)
 
 def get_chromosomes(genome_file):
@@ -98,7 +99,7 @@ def process_bam(bam, all_elements, chrs=None, all_reads=False):
     sam_filter = 4
     if not all_reads:
         sam_filter += 256
-    command += " -F {0} {1}".format(str(sam_filter), bam)    
+    command += " -F {0} {1}".format(str(sam_filter), bam)
     if chrs:
         command += " {0}".format(" ".join(chrs))
     command = "{0} | bamToBed -i stdin -tag NH -bed12 | intersectBed -a stdin -b {1} -split -wao".format(command, all_elements)
@@ -136,7 +137,7 @@ def update_counts(element, tot_counts, cont_counts, split_counts, is_split):
       cont_counts[elem] = cont_counts.get(elem, 0) + 1
 
 def count_features(bed, uniq=False):
-    
+
     # Initialize
     n_skipped = {}
     newRead = False     # keep track of different reads
@@ -170,7 +171,7 @@ def count_features(bed, uniq=False):
                 update_counts(element, tot_counts, cont_counts, split_counts, is_split)
                 # Re-Initialize the counters
                 element = []
-            
+
             element.append(ael)
             prev_rid = rid
             is_split = int(rbcount) > 1
@@ -257,9 +258,9 @@ def setup_logger():
     return log
 
 if __name__ == "__main__":
-    """ 
+    """
     Given a bam file, compute the read coverage for different genomic regions:
-        
+
         - exons
         - introns
         - exon-intron junctions
