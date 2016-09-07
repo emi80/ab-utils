@@ -44,6 +44,9 @@ parser.add_argument("--composite", action="store_true", default=False,
 parser.add_argument("--groups", type=str, default=None,
 	help="Define groups for composite tracks, comma-separated [default=%(default)s]]")
 
+#parser.add_argument("--overlay", type=str, default=None,
+#	help="Define groups for overlay tracks, comma-separated [default=%(default)s]]")
+
 
 # Read arguments
 args = parser.parse_args()
