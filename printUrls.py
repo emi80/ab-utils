@@ -57,6 +57,7 @@ palette = args.palette_file
 id = args.id
 host = args.host
 groups = args.groups.split(",") if args.groups else None
+#if color_factors and groups: groups = list(set(groups + [color_factors]))
 
 
 ##### FUNCTIONS ############

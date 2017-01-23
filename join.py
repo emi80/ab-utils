@@ -37,6 +37,8 @@ for i,line in enumerate(file1):
 			h1 = "\t".join((el for i,el in enumerate(line.strip().split("\t")) if i+1 not in x_indeces))
 			continue
 	line_sp = line.strip().split("\t")
+	#if i==2 and args.a_header and len(line_sp)==len(h1.split("\t"))+1:
+	#	h1 = "V0\t" + h1
 	x_fields = len(line_sp) - len(x_indeces)
 	k = "_".join(list(line_sp[x_index-1].strip() for x_index in x_indeces))
 	d[k] = "\t".join((el for i,el in enumerate(line.strip().split("\t")) if i+1 not in x_indeces))
@@ -69,6 +71,8 @@ for i,line in enumerate(file2):
 			h1 = "\t".join(("V"+str(n+1) for n in range(len(line_sp)+1, x_fields)))
 			h2 = "\t".join(("V"+str(n+1) for n in range(len(line_sp))))
 #			print "%s\t%s" %(h2,h1)
+	if i==2 and args.b_header and len(line_sp)==len(h2.split("\t"))+1:
+		h2 = "X0\t" + h1
 	k = "_".join(list(line_sp[y_index-1] for y_index in y_indeces))
 	if d.has_key(k):
 		print "%s\t%s" %(line.strip(), d[k])

@@ -1,22 +1,29 @@
 
-#
-# To add the custom field of the strand of transcription to sam files for cufflink
-# 
-# USAGE:
-# samtools view -S alignment.sam | ./sam2cufflinks.sh <sense_mate>
-# 
-# Choose <sense_mate> between:
-# - "MATE1_SENSE" 
-# - "MATE2_SENSE"
-#
-# It writes on stdout
-# 
+if [[ $# == 0 ]]; then
+
+echo "
+
+ To add the custom field of the strand of transcription to sam files for cufflink
+ 
+ USAGE:
+ samtools view -S alignment.sam | ./sam2cufflinks.sh <sense_mate>
+ 
+ Choose <sense_mate> between:
+ - \"MATE1_SENSE\" 
+ - \"MATE2_SENSE\"
+
+ It writes on stdout
+"
+exit
+fi
+ 
 
 
 # comments on the flag:
 # 0x10 --> reverse complemented 
 # 0x40 --> the read is MATE1
 # 0x50 --> the read is MATE2
+
 
 mate=$1
 

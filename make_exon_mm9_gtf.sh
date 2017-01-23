@@ -3,8 +3,11 @@
 cat - |\
 
 awk '$3=="exon"{
+if ($1 !~/^Contig/ && $1 !~/^Ultra/) {
+	chr[$12] = "chr"$1
+} else {chr[$12] = $1}
 print \
-"chr"$1"\t" \
+chr[$12]"\t" \
 "ENSEMBL\t" \
 "exon\t" \
 $4"\t" \

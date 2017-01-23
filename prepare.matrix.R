@@ -44,7 +44,8 @@ for ( i in 1:length(matrices) ) {
 	m = read.table(matrices[i], h=T)
 	if (grepl('human', basename(matrices[i]))) {merge_col = 'hs'}
 	if (grepl('mouse', basename(matrices[i]))) {merge_col = 'mm'}
-	orth_m = merge(orth, m, by.x=merge_col, by.y='row.names', all.x=T)
+	orth_m = merge(orth, m, by.x=merge_col, by.y='row.names')
+#	orth_m = merge(orth, m, by.x=merge_col, by.y='row.names', all.x=T)
 	#print(matrices[i])
 	#print(head(orth_m[,1:5]))
 	if (i==1) {new_m = orth_m}

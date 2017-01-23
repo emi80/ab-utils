@@ -31,28 +31,28 @@ prefix=$(basename $gtf .gtf)
 # ================================ Elements =====================================================
 
 date
-printf "Making a file for each element... " > /dev/stderr
+printf "Making a file for each element... " 
 
 mkdir -p Elements
 awk -v prefix=$prefix '$1!~/#/{print > "Elements/"prefix"."$3".gff"}' $gtf
 
-printf "DONE\n" > /dev/stderr
+printf "DONE\n" 
 
 
 # ============================== Introns ============================================================
 
 date
-printf "Adding the introns... " > /dev/stderr
+printf "Adding the introns... " 
  
 awk '$3=="exon"' $gtf | sort -k12,12 -k4,4n -k5,5n | awk -v fldgn=10 -v fldtr=12 -f /users/rg/sdjebali/Awk/make_introns.awk > Elements/${prefix}.intron.gff
 
-printf "done\n" > /dev/stderr
+printf "done\n" 
 
 
 # ============================= Lists ========================================================
 
 date
-printf "Writing lists of elements... " > /dev/stderr
+printf "Writing lists of elements... " 
 
 mkdir -p Lists
 awk '$3=="gene"{split($10,a,"\"");print a[2]}' $gtf | sort -u > Lists/${prefix}.gene.txt
@@ -61,12 +61,12 @@ awk '$3=="exon"{print $1"_"$4"_"$5"_"$6"_"$8}' $gtf | sort -u > Lists/${prefix}.
 awk '{print $1"_"($4-1)"_"($5+1)"_"$7}' Elements/${prefix}.intron.gff > Lists/${prefix}.txt 
 awk '$3=="gene"' $gtf | ~abreschi/Documents/utils/extract.gtf.tags.sh - gene_type | grep -vw NA | sort -u > Lists/${prefix}.gene_type.txt 
 
-printf "done\n" > /dev/stderr
+printf "done\n" 
 
 # ========================= Exon projections =======================================
 
 date
-printf "Writing exon projections... " > /dev/stderr
+printf "Writing exon projections... " 
 
 mkdir -p MakeSP
 ~sdjebali/bin/make_projected_exons_per_gene.sh $gtf MakeSP/ > MakeSP/${prefix}.exonproj.gff 2> MakeSP/make_projected_exons_per_gene.err
@@ -78,7 +78,7 @@ for t in `cat Lists/${prefix}.gene_type.txt`; do grep "gene_type \"$t\";" Elemen
 # ======================== Gtf to tsv =================================================
 
 date
-printf "Writing two-column files of different gtf tags... " > /dev/stderr
+printf "Writing two-column files of different gtf tags... " 
 
 # Write parsed tsv files from the gtf
 mkdir -p gtf2tsv
@@ -86,13 +86,15 @@ mkdir -p gtf2tsv
 ~abreschi/Documents/utils/extract.gtf.tags.sh Elements/${prefix}.gene.gff gene_id,gene_name | sed '1igene_id\tgene_name' > gtf2tsv/gene.gene_name.tsv
 ~abreschi/Documents/utils/extract.gtf.tags.sh Elements/${prefix}.gene.gff gene_id,gene_type | sed '1igene_id\tgene_type'> gtf2tsv/gene.gene_type.tsv
 awk 'BEGIN{OFS="\t"}{split($10, a, "\""); print $1"_"$4"_"$5"_"$7, a[2]}' Elements/${prefix}.exon.gff | sort -u > gtf2tsv/exon.gene_id.tsv
+~abreschi/Documents/utils/extract.gtf.tags.sh MakeSP/${prefix}.exonproj.gff 1,4,5,7,gene_id | awk 'BEGIN{OFS="\t"}{l=$3-$2+1;a[$5]+=l}END{for(g in a){print g,a[g]}}' > gtf2tsv/gene_id.projlen.tsv
+~abreschi/Documents/utils/extract.gtf.tags.sh Elements/${prefix}.gene.gff 4,5,gene_id | awk 'BEGIN{OFS=FS="\t"; print "gene_id", "gene_len"}{print $3, $2-$1+1}' > gtf2tsv/gene_id.gene_len.tsv
 
-printf "done\n" > /dev/stderr
+printf "done\n" 
 
 # ========================= Gene type =======================================
 
 date
-printf "Split file by gene_type... " > /dev/stderr
+printf "Split file by gene_type... " 
 
 # Separate gtf by gene_type
 mkdir -p gene_type
@@ -102,13 +104,13 @@ grep "gene_type \"$a\";" Elements/${prefix}.transcript.gff > gene_type/${prefix}
 grep "gene_type \"$a\";" Elements/${prefix}.exon.gff > gene_type/${prefix}.exon.${a}.gff
 done
 
-printf "done\n" > /dev/stderr
+printf "done\n" 
 
 
 # ========================= Antisense ============================================
 
 date
-printf "Annotate antisense overlap... " > /dev/stderr
+printf "Annotate antisense overlap... " 
 
 # Report antisense overlap
 gene_type="protein_coding"
@@ -122,7 +124,7 @@ printf "done\n" > /dev/stderr
 # ======================= GC content ==========================================
 
 date
-printf "Computing GC content... " > /dev/stderr
+printf "Computing GC content... " 
 
 mkdir -p GC-content
 
@@ -135,21 +137,21 @@ mkdir -p GC-content
 # -- Introns --
 #awk -v file=GC-content/${prefix}.gene.exonproj.GC.tsv 'BEGIN{OFS=FS="\t";while(getline<file>0){exlen[$1]=$3;exGC[$1]=$2}}{inGC=$2-exGC[$1]; inlen=$3-exlen[$1]; print $1, inGC, inlen, (inlen!=0?inGC/inlen:"NA")}' GC-content/${prefix}.gene.GC.tsv > GC-content/${prefix}.intronproj.GC.tsv &
 
-printf "done\n" > /dev/stderr
+printf "done\n" 
 
 
 # ========================== PhastCons ========================================
 
 date
-printf "Computing average exonic phastCons... " > /dev/stderr
+printf "Computing average exonic phastCons... " 
 mkdir -p phastCons
 
 # phastCons for genes, using projected exons
 ~abreschi/Documents/utils/gtfgene2bed6.sh MakeSP/${prefix}.exonproj.gff | $bwtool summary -header -keep-bed -with-sum stdin $phastCons phastCons/${prefix}.exonproj.phastCons.tsv 
 
-awk 'BEGIN{OFS=FS="\t"} $0!~/^#/ {a[$4]+=$13; b[$4]+=$7} END {for(g in a){print g, a[g]/b[g]}}' phastCons/${prefix}.exonproj.phastCons.tsv > phastCons/dmel-all-no-analysis-r5.54.exonproj.phastCons.mean.tsv 
+awk 'BEGIN{OFS=FS="\t"} $0!~/^#/ {a[$4]+=$13; b[$4]+=$7} END {for(g in a){print g, a[g]/b[g]}}' phastCons/${prefix}.exonproj.phastCons.tsv > phastCons/${prefix}.gene.exonproj.phastCons.mean.tsv 
 
-printf "done\n" > /dev/stderr
+printf "done\n" 
 
 
 ## === GO ===

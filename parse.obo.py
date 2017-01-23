@@ -10,6 +10,7 @@ import sys
 parser = ArgumentParser(description='Parse an obo file and produces two tsv files: 1) parent-child relations 2) term description')
 parser.add_argument("-i", "--input", type=str, default="stdin", help="obo file. \"stdin\" to read from stdin")
 parser.add_argument("-o", "--output", type=str, default="obo.out", help="output file name WITHOUT extension")
+parser.add_argument("-f", "--fields", type=str, default="name,namespace", help="fields to be included in the tab delimited output")
 #parser.add_argument("-g", "--gtf", type=str, help="gtf file with all elements (genes, transcripts, exons).")
 #parser.add_argument("-w", "--window", type=int, help="number of nucleotides around junctions.", default=20)
 args = parser.parse_args()
@@ -56,12 +57,14 @@ else:
 out1 = open(args.output + ".relationship.tsv", "w")
 out2 = open(args.output + ".description.tsv", "w")
 
+fields = args.fields.split(",")
 
 for k, v in d.iteritems():
 	# Ignore obsolete terms
 	if v.get("is_obsolete", 0) == ["true"]:
 		continue
-	out2.write("%s\t%s\t%s\n" %(k, v["name"][0], v["namespace"][0]))
+	l = k + "\t" + "\t".join([v[field][0] for field in fields])
+	out2.write(l + "\n")
 	for rel in v.get("is_a", ["NA"]):
 		out1.write("%s\t%s\n" %(rel, k))
 

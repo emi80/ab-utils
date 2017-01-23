@@ -11,7 +11,22 @@ fi;
 
 
 
-awk -v select=$select 'BEGIN{OFS=FS="\t"; split(select, a, ","); for(i in a){tags[a[i]]}}
-{split($9,a,"; "); 
+awk -v select=$select 'BEGIN{OFS=FS="\t"; 
+split(select, a, ","); 
+for(i=1;i<=length(a);i++) {
+	if(a[i]~/^[0-9]*$/) {
+		fields[a[i]]
+	} else {
+		tags[a[i]]
+	}
+}
+}
+{
+for(f=1;f<=NF;f++) {
+	if(f in fields) {
+		printf $f"\t"
+	}
+}
+split($9,a,"; "); 
 for(i=1;i<=length(a);i++) {split(a[i],b," ");gsub(/[";]/,"",b[2]); if(b[1] in tags) {printf b[2]"\t"}}
 printf "\n"}' $file | sed 's/\t$//g'

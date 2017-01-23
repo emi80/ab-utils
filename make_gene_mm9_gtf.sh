@@ -5,7 +5,9 @@ cat - |\
 awk '
 {
 genes[$10] = $10
-chr[$10] = "chr"$1
+if ($1 !~/^Contig/ && $1 !~/^Ultra/) {
+	chr[$10] = "chr"$1
+} else {chr[$10] = $1}
 if (start[$10] == "" || start[$10] > $4 ) {start[$10] = $4}
 if (end[$10] == "" || end[$10] < $5) {end[$10] = $5}
 strand[$10] = $7

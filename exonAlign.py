@@ -33,6 +33,8 @@ def read_gtf(f, outF):
 		lastExon = max(d[gene_id].keys())
 		gene_end = int(d[gene_id][lastExon][1])
 		gene_start = int(d[gene_id][1][0])
+		nb_exons = len(d[gene_id].keys())
+		nb_introns = nb_exons - 1 
 		for i in sorted(d[gene_id].keys()):
 			# Write the exons
 			start = int(d[gene_id][i][0])
@@ -41,10 +43,11 @@ def read_gtf(f, outF):
 			if strand == "+":
 				start = start - gene_start
 				end = end - gene_start
+				lineOut = "\t".join((gene_id, str(start), str(end), "exon%s" %i, "struct"))
 			if strand == "-":
 				start = gene_end - start# + gene_start
 				end = gene_end - end# + gene_start
-			lineOut = "\t".join((gene_id, str(start), str(end), "exon%s" %i, "struct"))
+				lineOut = "\t".join((gene_id, str(end), str(start), "exon%s" %(nb_exons-i+1), "struct"))
 			outF.write(lineOut + "\n")
 			print lineOut
 	
@@ -56,10 +59,11 @@ def read_gtf(f, outF):
 			if strand == "+":
 				start = start - gene_start
 				end = end - gene_start
+				lineOut = "\t".join((gene_id, str(start), str(end), "intron%s" %i, "struct"))
 			if strand == "-":
 				start = gene_end - start# + gene_start 
 				end = gene_end - end# + gene_start
-			lineOut = "\t".join((gene_id, str(start), str(end), "intron%s" %i, "struct"))
+				lineOut = "\t".join((gene_id, str(end), str(start), "intron%s" %(nb_introns-i+1), "struct"))
 			outF.write(lineOut + "\n")
 			print lineOut
 
