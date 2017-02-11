@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
-f=$1
-m=$2
+f="$1"
+m="$2"
 
 if [[ $# != 2 ]]; then
 	echo "USAGE: $0 selected_columns matrix.file.tsv"
@@ -10,7 +10,7 @@ if [[ $# != 2 ]]; then
 fi
 
 
-awk -v f=$f '
+awk -v f="$f" '
 BEGIN {
 	FS=OFS="\t";
 	split(f, a, ":");
@@ -56,6 +56,6 @@ NR > 1 {
 	}
 	printf "\n"
 }
-' $m
+' "$m"
 
 
