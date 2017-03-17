@@ -4,12 +4,20 @@ import argparse, sys
 
 parser = argparse.ArgumentParser()
 parser = argparse.ArgumentParser(description='Process some integers.')
-parser.add_argument("-a", "--file1", type=str, help="file name or stdin. This is the file that is stored in memory")
-parser.add_argument("-b", "--file2", type=str, help="file name or stdin")
-parser.add_argument("-x", type=str, default="1", help="index of the field you want file a to be joined on. Accept multiple indeces comma-separated")
-parser.add_argument("-y", type=str, default="1", help="index of the field you want file b to be joined on. Accept multiple indeces comma-separated")
+parser.add_argument("-a", "--file1", type=str,
+		help="file name or stdin. This is the file that is stored in memory")
+parser.add_argument("-b", "--file2", type=str,
+		help="file name or stdin")
+parser.add_argument("-x", type=str, default="1",
+		help="index of the field you want file a to be joined on. Accept multiple indeces comma-separated")
+parser.add_argument("-y", type=str, default="1",
+		help="index of the field you want file b to be joined on. Accept multiple indeces comma-separated")
 parser.add_argument("--a_header", action="store_true", help="file \"a\" has a header")
 parser.add_argument("--b_header", action="store_true", help="file \"b\" has a header")
+parser.add_argument("-u", "--unmatched", action="store_true",
+		help="output lines in file \"b\" with no correspondence in file \"a\"")
+parser.add_argument("-p", "--placeholder", type=str, default="-",
+		help="Placeholder character for unmatched lines in file \"a\" - only works in combination with'--unmatched'")
 args = parser.parse_args()
 
 
@@ -32,6 +40,9 @@ d = {}
 for i,line in enumerate(file1):
 	if line.strip() == "":
 		continue
+	if args.unmatched:
+		if i == 0:
+			ph = "\t".join((args.placeholder for i,el in enumerate(line.strip().split("\t")) if i+1 not in x_indeces))
 	if args.a_header:
 		if i == 0:
 			h1 = "\t".join((el for i,el in enumerate(line.strip().split("\t")) if i+1 not in x_indeces))
@@ -76,7 +87,8 @@ for i,line in enumerate(file2):
 	k = "_".join(list(line_sp[y_index-1] for y_index in y_indeces))
 	if d.has_key(k):
 		print "%s\t%s" %(line.strip(), d[k])
-
+	elif args.unmatched:
+		print "%s\t%s" %(line.strip(), ph)
 
 
 

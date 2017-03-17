@@ -17,9 +17,9 @@ parser.add_option('-O','--organism',dest='organism',help='human or mouse',metava
 parser.add_option('--filters', dest='filters', help='list of variables used for filtering', default='idr')
 parser.add_option('-i','--idr',dest='idr',help='select idr threshold in the interval [0,1]. A threshold of 1 means no filtering.', default="0.1", metavar='0.1')
 #parser.add_option('-t','--thr',dest='thr',default="0",help='lower threshold for value',default="0", metavar='0')
-parser.add_option("-t", "--thr", dest="thr", metavar="key:lower_thr", 
+parser.add_option("-t", "--thr", dest="thr", metavar="key:lower_thr",
 	help="A comma-separated list of keys and values, where the value is the lower threshold for the key")
-parser.add_option("-T", "--Thr", dest="Thr", metavar="key:higher_thr", 
+parser.add_option("-T", "--Thr", dest="Thr", metavar="key:higher_thr",
 	help="A comma-separated list of keys and values, where the value is the higher threshold for the key")
 #parser.add_option('-f','--frac_cov',dest='frac_cov',help='region covered at least',default="0", metavar='0')
 #parser.add_option('-F','--Frac_cov',dest='Frac_cov',help='region covered at most',default="1", metavar='1')
@@ -86,7 +86,10 @@ for line in open_input:
         if options.element != segment:
             features.add(segment)
             continue
-#        print line
+        if ann == 'Cufflinks' and 'FPKM' not in options.value.upper().split(','):
+            continue
+        if 'cuff' in tags.lower():
+            continue
         tags = dict(tag.split() for tag in tags.split('; '))
 
         if options.element == 'transcript':
@@ -105,7 +108,7 @@ for line in open_input:
             pass
         if lower_thr:
             for t in lower_thr:
-                a,b = t.split(":") 
+                a,b = t.split(":")
                 if float(tags.get(a).strip('"')) <= float(b):
                     element_value = "NA"
                     d.setdefault(element_id, {}).setdefault(sample,element_value)
@@ -117,6 +120,9 @@ for line in open_input:
                     element_value = "NA"
                     d.setdefault(element_id, {}).setdefault(sample,element_value)
                     continue
+        else:
+            element_id = tags['gene_id'].strip('"')
+        if options.strip_id: element_id = element_id.split('.')[0]
 
         if options.replicates:
             key1=options.value+"1"
@@ -125,7 +131,6 @@ for line in open_input:
                 cell_lines.remove(sample)
                 break
             idr = tags['iIDR'].strip('"')
-    
             if idr != 'NA' and float(idr) > float(options.idr):
                 element_value = "NA"
                 d.setdefault(element_id, {}).setdefault(sample,element_value)
