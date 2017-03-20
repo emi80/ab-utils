@@ -59,11 +59,13 @@ out2 = open(args.output + ".description.tsv", "w")
 
 fields = args.fields.split(",")
 
+sep = ","
+
 for k, v in d.iteritems():
 	# Ignore obsolete terms
 	if v.get("is_obsolete", 0) == ["true"]:
 		continue
-	l = k + "\t" + "\t".join([v[field][0] for field in fields])
+	l = k + "\t" + "\t".join([sep.join(v.get(field, ["NA"])) for field in fields])
 	out2.write(l + "\n")
 	for rel in v.get("is_a", ["NA"]):
 		out1.write("%s\t%s\n" %(rel, k))
