@@ -6,27 +6,20 @@ use Getopt::Long;
 
 # default values
 my $asta;	# option variable with default value
-my $ssj;	
-my $ssc;	
-my $event;
+my $ssj;	# option variable with default value
+my $ssc;	# option variable with default value
 my $threshold = 10;
-my $out="astalavista.psi.out";
+my $out="astalavista.psi.out.gtf";
 my $verbose;
 my $help;
-
-if (!@ARGV) {
-    print "$0: Argument required.\n";
-    usage();
-}
-
 
 GetOptions(
     'asta|a=s' => \$asta,
     'ssj|b=s' => \$ssj,
-    'ssc|c:s' => \$ssc,
-    'event|e=s' => \$event,
+    'ssc|c=s' => \$ssc,
     'Threshold|t:i' => \$threshold,
     'out|o:s' => \$out,
+    'verbose|v' => \$verbose,
     'help|h|?' => \$help
    ) or die("Error in command line arguments\n\n*** --help *** for usage\n\n");
 
@@ -39,140 +32,75 @@ sub usage {
 
   Description: compute PSI values of pairwise AStalavista AS events based on ipsa splice site 
                junctions and splice site counts (boundary).
-               Output: the AStalavista file with the PSI as the last field and a TSV file id event and PSI
-	               in one folder per event.
+               Output: the AStalavista file with the PSI as the last field.
 
   Usage: perl $0
     --asta|a      : pairwise AS events from astalavista output gtf file (1-based coordinate)
     --ssj|b       : splice site junction quantifications from ipsa pipeline BED file (1-based coordinate)
     --ssc|c       : splice site boundary quantifications from ipsa pipeline BED file (1-based coordinate)
-                    only required for intron retention
-    --event|e     : list of events to be processed (comma-separated)
-                    ESS = exon skipping single
-		    ESM = exon skipping multiple
-	            IR  = intron retention
-		    ME  = mutually exclusive exons
-		    AD  = alternative donor
-		    AA  = alternative acceptor
     --threshold|t : minimum number of read counts for the sum of all splice site junctions and boundaries
                     PSI=NA if the sum is below the threshold  (default = 10) 
 		    e.g. single exon skipping: PSI=a+b/a+b+2c, a+b+c > threshold
-    --out|o       : output file name [optional] (without extension)
-    --outdir      : folder to write output files
-#    --verbose|v   : foreach event print type_of_event structure PSI
+    --out|o       : output file name [optional] (default "astalavista.psi.out.gtf")
+    --verbose|v   : foreach event print type_of_event structure PSI
     --help
     
   Example:
-    perl $0 --asta astalavista.gtf --ssj sample.ssj.bed --ssc sample.ssc.bed --event ESS,IR --outdir
+    perl $0 --asta astalavista.gtf --ssj sample.ssj.bed --ssc sample.ssc.bed
 
   Information on PSI calculation for the different AS events:
-    display ~cklein/utils/usage/psi.png
+    display ~cklein/utils/usage/psi.jpg
 
 USAGE
     exit();
 }
 ###########################################################################################
-print STDERR "#============= PSI LOCAL: ASTALAVISTA + IPSA ==================\n\n";
-
-#=====================================================================
-# warn "Splice chain from second transcript has two equal coordinates"
-#=====================================================================
-my $warn=0;
-
-#========
-# events
-#========
-my @events= split(/,/,$event);
-print STDERR "SELECTED EVENTS:\n";
-foreach my $e (@events){
-    print STDERR "$e\n";
-    `mkdir -p $e`;
-}
-
-#=============================
-# output files for each event
-#=============================
-my $essg;
-my $esst;
-my $irg;
-my $irt;
-my $meg;
-my $met;
-my $adg;
-my $adt;
-my $aag;
-my $aat;
-my $esmg;
-my $esmt;
-
-if("ESS" ~~ @events){
-    open($essg,">ESS/$out.gtf"); #open output file
-    open($esst,">ESS/$out.tsv"); #open output file
-}
-if("IR" ~~ @events){
-    open($irg,">IR/$out.gtf"); #open output file
-    open($irt,">IR/$out.tsv"); #open output file
-}
-if("ME" ~~ @events){
-    open($meg,">ME/$out.gtf"); #open output file
-    open($met,">ME/$out.tsv"); #open output file
-}
-if("AD" ~~ @events){
-    open($adg,">AD/$out.gtf"); #open output file
-    open($adt,">AD/$out.tsv"); #open output file
-}
-if("AA" ~~ @events){
-    open($aag,">AA/$out.gtf"); #open output file
-    open($aat,">AA/$out.tsv"); #open output file
-}
-if("ESM" ~~ @events){
-    open($esmg,">ESM/$out.gtf"); #open output file
-    open($esmt,">ESM/$out.tsv"); #open output file
-}
 
 
-#===================
-# READING SSJ FILE
-#===================
+# ssj bed
 my %ssj;
 my $cSSJ=0;
-print STDERR "\nREADING SSJ INPUT FILE: $ssj\n";
+print STDERR "\nReading ssj input file: $ssj\n";
 open(J,"<$ssj" || die "can't open file $ssj: $!");
 while(my $l = <J>){
     chomp($l);
     my @tmp = split(/\t/,$l);
+#    if($tmp[0] =~ /^[^\_]+\_(\d+)\_(\d+)\_[+|-]$/){
+#	my $k = $1."_".$2; #key=coordinate_coordinate; value=counts;
+#	$ssj{$k}=$tmp[1];
 	$ssj{$tmp[0]}=$tmp[1];
 	$cSSJ=$cSSJ+1;
+#    }else{
+#	print STDERR "Problem reading ssj file $ssj\n";
+#    }
 }
 close(J);
-print STDERR "$cSSJ input lines\n"; 
+print STDERR "$cSSJ input lines from $ssj\n"; 
 
-#======================================
-# READING SSC FILE IF NEEDED (only IR)
-#======================================
- my %ssc;
-if("IR" ~~ @events){
-    if(defined $ssc){
-	my $cSSC=0;
-	print STDERR "\nREADING SSC INPUT FILE: $ssc\n";
-	open(C,"<$ssc" || die "can't open file $ssc: $!");
-	while(my $l = <C>){
-	    chomp($l);
-	    my @tmp = split(/\t/,$l);
-	    $ssc{$tmp[0]}=$tmp[1];
-	    $cSSC=$cSSC+1;
-	}
-	close(C);
-	print STDERR "$cSSC input lines\n"; 
-    }else{ 
-	die("\nEXITING: SSC file is required for IR.\n\n\n");
-    }
+
+# ssc bed
+my %ssc;
+my $cSSC=0;
+print STDERR "\nReading ssc input file: $ssc\n";
+open(C,"<$ssc" || die "can't open file $ssc: $!");
+while(my $l = <C>){
+    chomp($l);
+    my @tmp = split(/\t/,$l);
+#    if($tmp[0] =~ /^[^\_]+\_(\d+)\_[+|-]$/){
+	#key=coordinate; value=counts;
+#	$ssc{$1}=$tmp[1];
+	$ssc{$tmp[0]}=$tmp[1];
+	$cSSC=$cSSC+1;
+#    }
 }
-#=================================================
-# READING AStalavista GTF and compute PSI values
-#=================================================
-print STDERR "\nREADING AStalavista INPUT FILE: $asta\n";
+close(C);
+print STDERR "$cSSC input lines from $ssc\n"; 
 
+
+# astalavista GTF
+print STDERR "\nReading asta input file: $asta\n";
+
+open(O,">$out"); #open output file
 open(A,"<$asta" || die "can't open file $asta: $!");
 while(my $line = <A>){
     chomp($line);
@@ -198,12 +126,8 @@ while(my $line = <A>){
     my $strand = $tmp[6];
     my $structure = $tmp[15]; 
     my $splice_chain = $tmp[17]; 
-
-
-    #-------------------------
-    # EXON SKIPPING SINGLE
-    #-------------------------
-    if (($structure =~ /^0\,1\-2\^$/) && ("ESS" ~~ @events)) {
+    
+    if ($structure =~ /^0\,1\-2\^$/) {# exon skipping SINGLE 
 	# psi=(a+b)/(a+b+2c)
 	# only need ssj
 	# complete:psi=1
@@ -225,7 +149,7 @@ while(my $line = <A>){
 	    my @sc2;
 	    # second transcript(s)
 	    my $flag_compute_psi=0;
-	    if($tmpSC2[0] == $tmpSC2[1]){$warn=$warn+1;}
+	    if($tmpSC2[0] == $tmpSC2[1]){print STDERR "\n=====PROBLEM=====\nSplice chain from second transcript has two equal coordinates\n$line\n$sc2\n====\n\n"}
 	    elsif(($strand eq "+") and ($tmpSC2[0] < $tmpSC2[1])){
 		$sc2[0]=$tmpSC2[0];
 		$sc2[1]=$tmpSC2[1];
@@ -238,7 +162,6 @@ while(my $line = <A>){
 		print STDERR "\n**********\nStrand $strand not available or it does not match the expected genomic position\n$line\n****\n";
 	    }
 	    
-	    # compute PSI
 	    my $psi;
 	    if($flag_compute_psi){
 		my $a = 0;
@@ -266,35 +189,29 @@ while(my $line = <A>){
 	    }else{
 		$psi="NA";
 	    }
-
-	    # print gtf output
-	    print $essg $line."psi \"";
+	    #print output
+	    print O $line."psi \"";
 	    if($psi ne "NA"){
-		printf $essg ("%.4f", $psi);
+		printf O ("%.4f", $psi);
 	    }else{
-		print $essg $psi;
+		print O $psi;
 	    }
-	    print $essg "\";\n";
-	    
-            # print tsv output
-	    print $esst "$id\t";
-	    if($psi ne "NA"){
-		printf $esst ("%.4f", $psi);
-	    }else{
-		print $esst $psi;
+	    print O "\";\n";
+	    if($verbose){
+		print "$id\texon_skipping_single\t$structure\t";
+		if($psi ne "NA"){
+		    printf("%.4f", $psi);
+		}else{
+		    print $psi;
+		}
+		print "\n";
 	    }
-	    print $esst "\n";
-	    
 	}else{
 	    print STDERR "Splice chain $splice_chain does not have the expected format $structure\n";
 	}
     }
     
-
-    #------------------
-    # INTRON RETENTION
-    #------------------
-    elsif($structure =~/^0\,1\^2\-$/ && ("IR" ~~ @events)){
+    elsif($structure =~/^0\,1\^2\-$/){# intron retention
 	# psi=(2a)/(b+c+2a)
 	# no intron:psi=1
 	# retained:psi=0
@@ -337,8 +254,6 @@ while(my $line = <A>){
 		$c = $ssc{$chr."_".$sc2[1]."_".$strand};
 	    }
 	    
-
-	    # compute PSI
 	    my $psi;
 	    
 	    if(($a+$b+$c) > $threshold ){
@@ -346,35 +261,30 @@ while(my $line = <A>){
 	    }else{
 		$psi="NA";
 	    }
-	    
-	    # print gtf output
-	    print $irg $line."psi \"";
+	    #print output
+	    print O $line."psi \"";
 	    if($psi ne "NA"){
-		printf $irg ("%.4f", $psi);
+		printf O ("%.4f", $psi);
 	    }else{
-		print $irg $psi;
+		print O $psi;
 	    }
-	    print $irg "\";\n";
+	    print O "\";\n";
     
-	    # print tsv output
-	    print $irt "$id\t";
-	    if($psi ne "NA"){
-		printf $irt ("%.4f", $psi);
-	    }else{
-		print $irt $psi;
-	    }
-	    print $irt "\n";
-	    
+	    if($verbose){
+		print "$id\tintron_retention\t$structure\t";
+		if($psi ne "NA"){
+		    printf("%.4f", $psi);
+		}else{
+		    print $psi;
+		}
+		print "\n";
+	    }	
 	}else{
 	    print STDERR "Splice chain $splice_chain does not have the expected format $structure\n";
 	}
     } 
     
-
-    #-------------------
-    # MUTUALLY EXCLUSIVE
-    #-------------------
-    elsif($structure=~/^1\-2\^\,3\-4\^$/ && ("ME" ~~ @events) ){
+    elsif($structure=~/^1\-2\^\,3\-4\^$/){# mutually exclusive
 	# psi=(c+d)/(c+d+a+b)
 	# requires only ssj
 	# c=f1,s1;d=s2,f2; (sorted: always from sc1)
@@ -443,7 +353,6 @@ while(my $line = <A>){
 		    $b = $ssj{$chr."_".$sc2[1]."_".$f2."_".$strand};
 		}
 		
-		# compute PSI
 		my $psi;
 		
 		if(($a+$b+$c+$d) > $threshold ){
@@ -451,35 +360,30 @@ while(my $line = <A>){
 		}else{
 		    $psi="NA";
 		}
-
-		# print gtf output
-		print $meg $line."psi \"";
+		#print output
+		print O $line."psi \"";
 		if($psi ne "NA"){
-		    printf $meg ("%.4f", $psi);
+		    printf O ("%.4f", $psi);
 		}else{
-		    print $meg $psi;
+		    print O $psi;
 		}
-		print $meg "\";\n";
+		print O "\";\n";
 		
-		# print tsv output
-		print $met "$id\t";
-		if($psi ne "NA"){
-		    printf $met ("%.4f", $psi);
-		}else{
-		    print $met $psi;
+		if($verbose){
+		    print "$id\tmutually_exclusive\t$structure\t";
+		    if($psi ne "NA"){
+			printf("%.4f", $psi);
+		    }else{
+			print $psi;
+		    }
+		    print "\n";
 		}
-		print $met "\n";
-		
 	    }
 	}else{
 	    print STDERR "Splice chain $splice_chain does not have the expected format $structure\n";
 	}
     }
-
-    #-------------------
-    # ALTERNATIVE DONOR
-    #-------------------
-    elsif($structure=~/^1\^\,2\^$/  && ("AD" ~~ @events)){
+    elsif($structure=~/^1\^\,2\^$/){# alternative donor
 	# psi=(a)/(a+b)
 	# requires only ssj
 	# a=s1,f2; (sorted: always from sc1)
@@ -513,7 +417,6 @@ while(my $line = <A>){
 		$b = $ssj{$chr."_".$sc2."_".$f2."_".$strand};
 	    }
 	    
-	    # compute PSI
 	    my $psi;
 	    
 	    if( ($a+$b) > $threshold ){
@@ -521,32 +424,28 @@ while(my $line = <A>){
 	    }else{
 		$psi="NA";
 	    }
-	    # print gtf output
-	    print $adg $line."psi \"";
+	    #print output
+	    print O $line."psi \"";
 	    if($psi ne "NA"){
-		printf $adg ("%.4f", $psi);
+		printf O ("%.4f", $psi);
 	    }else{
-		print $adg $psi;
+		print O $psi;
 	    }
-	    print $adg "\";\n";
+	    print O "\";\n";
 	    
-	    # print tsv output
-	    print $adt "$id\t";
-	    if($psi ne "NA"){
-		printf $adt ("%.4f", $psi);
-	    }else{
-		print $adt $psi;
-	    }
-	    print $adt "\n";
-	    	    
+	    if($verbose){
+		print "$id\talternative_donor\t$structure\t";
+		if($psi ne "NA"){
+		    printf("%.4f", $psi);
+		}else{
+		    print $psi;
+		}
+		print "\n";
+	    }	    
 	}
        
     }
-
-    #---------------------------
-    # ALTERNATIVE ACCEPTOR
-    #---------------------------
-    elsif($structure=~/^1\-\,2\-$/  && ("AA" ~~ @events)){
+    elsif($structure=~/^1\-\,2\-$/){# alternative acceptor
 	# psi=(a)/(a+b)
 	# requires only ssj
 	# a=f1,s1; (sorted: always from sc1)
@@ -580,7 +479,6 @@ while(my $line = <A>){
 		$b = $ssj{$chr."_".$f1."_".$sc2."_".$strand};
 	    }
 	    
-	    # compute PSI
 	    my $psi;
 	    
 	    if( ($a+$b) > $threshold ){
@@ -588,32 +486,28 @@ while(my $line = <A>){
 	    }else{
 		$psi="NA";
 	    }
-	    # print gtf output
-	    print $aag $line."psi \"";
+	    #print output
+	    print O $line."psi \"";
 	    if($psi ne "NA"){
-		printf $aag ("%.4f", $psi);
+		printf O ("%.4f", $psi);
 	    }else{
-		print $aag $psi;
+		print O $psi;
 	    }
-	    print $aag "\";\n";
+	    print O "\";\n";
 	    
-	    # compute tsv output
-	    print $aat "$id\t";
-	    if($psi ne "NA"){
-		printf $aat ("%.4f", $psi);
-	    }else{
-		print $aat $psi;
+	    if($verbose){
+		print "$id\talternative_acceptor\t$structure\t";
+		if($psi ne "NA"){
+		    printf("%.4f", $psi);
+		}else{
+		    print $psi;
+		}
+		print "\n";
 	    }
-	    print $aat "\n";
-	    
 	}
 	
     }
-
-    #-----------------------
-    # EXON SKIPPING MULTIPLE
-    #-----------------------
-    elsif($structure=~/^0\,1\-2\^3\-4\^/ && ("ESM" ~~ @events)){
+    elsif($structure=~/^0\,1\-2\^3\-4\^/){# exon skipping MULTI
 	# pattern matching at least two exons skipped
 	# number of junctions is precisely the number of splice sites (n) 
 	# (example with 2 skipped exons => 4 new splice sites s1..s4, 
@@ -681,55 +575,27 @@ while(my $line = <A>){
 		    $psi="NA";
 		}
 		
-		# print gtf output
-		print $esmg $line."psi \"";
+		#print output
+		print O $line."psi \"";
 		if($psi ne "NA"){
-		    printf $esmg ("%.4f", $psi);
+		    printf O ("%.4f", $psi);
 		}else{
-		    print $esmg $psi;
+		    print O $psi;
 		}
-		print $esmg "\";\n";
+		print O "\";\n";
 		
-		# print tsv output
-		print $esmt "$id\t";
-		if($psi ne "NA"){
-		    printf $esmt ("%.4f", $psi);
-		}else{
-		    print $esmt $psi;
+		if($verbose){
+		    print "$id\texon_skipping_multi\t$structure\t";
+		    if($psi ne "NA"){
+			printf("%.4f", $psi);
+		    }else{
+			print $psi;
 		    }
-		print $esmt "\n";
-		
+		    print "\n";
+		}
 	    }
 	}
     } # close the last case of structure, otherwise complex AS/DSP/VST event and PSI=NA
 }
-
-# close files
 close(A);
-if("ESS" ~~ @events){
-    close($essg);
-    close($esst);
-}
-if("IR" ~~ @events){
-    close($irg);
-    close($irt);
-}
-if("ME" ~~ @events){
-    close($meg);
-    close($met);
-}
-if("AD" ~~ @events){
-    close($adg);
-    close($adt);
-}
-if("AA" ~~ @events){
-    close($aag);
-    close($aat);
-}
-if("ESM" ~~ @events){
-    close($esmg);
-    close($esmt);
-}
-
-# warnings
-print STDERR "\nWARNING: $warn Splice chains from second transcript have two equal coordinates\n\n\n";
+close(O);
