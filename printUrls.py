@@ -38,14 +38,17 @@ parser.add_argument("-p", "--palette_file", default="/users/rg/abreschi/R/palett
 parser.add_argument("-b", "--browser", default="ucsc", type=str,
 	help="Browser for which the urls are written: <ucsc> <igv> [default=%(default)s]]")
 
+parser.add_argument("--viewLimits", default="0:80", type=str,
+	help="Top and low signal that is shown [default=%(default)s]]")
+
 parser.add_argument("--composite", action="store_true", default=False,
 	help="If the files are part of a composite track [default=%(default)s]]")
 
 parser.add_argument("--groups", type=str, default=None,
 	help="Define groups for composite tracks, comma-separated [default=%(default)s]]")
 
-#parser.add_argument("--overlay", type=str, default=None,
-#	help="Define groups for overlay tracks, comma-separated [default=%(default)s]]")
+parser.add_argument("--overlay", type=str, default=None,
+	help="Define groups for overlay tracks, comma-separated [default=%(default)s]]")
 
 
 # Read arguments
@@ -57,7 +60,9 @@ palette = args.palette_file
 id = args.id
 host = args.host
 groups = args.groups.split(",") if args.groups else None
+#overlayP
 #if color_factors and groups: groups = list(set(groups + [color_factors]))
+
 
 
 ##### FUNCTIONS ############
@@ -119,9 +124,10 @@ if args.browser == "igv":
 
 # PARAMETERS
 
-limitMin = "0"
-limitMax = "80"
-viewLimits = "%s:%s" %(limitMin, limitMax)
+#limitMin = "0"
+#limitMax = "80"
+#viewLimits = "%s:%s" %(limitMin, limitMax)
+viewLimits = args.viewLimits
 type = "bigWig"
 visibility = "2"
 autoScale = "off"
@@ -147,12 +153,42 @@ if args.composite:
 		print "sortOrder %s" %(" ".join(["%s=+" %(group) for group in groups]))
 	print ""
 
+
+if args.overlay:
+	overlayFactors = args.overlay.split(",") if args.overlay else None
+	# Select all the labels for each group of multiwig
+	overlayParents = set()
+	for value in mdata.itervalues():
+		overlayParents.add(",".join(value[k] for k in overlayFactors))
+
+	# Print the lines for multiwig containers
+	for overlayParent in overlayParents:
+		print "track %s" %(overlayParent)
+		print "shortLabel %s" %(overlayParent)
+		print "longLabel %s" %(overlayParent)
+		print "container multiWig"
+		print "aggregate transparentOverlay"
+		print "showSubtrackColorOnUi on"
+		print "type bigWig 0 1000"
+		print "viewLimits %s" %(viewLimits)
+		print "autoScale %s" %(autoScale)
+		print "maxHeightPixels %s" %(maxHeightPixels)
+		print "visibility %s" %(visibility)
+		print ""
+	
+
+# Go over each entry of the metadata file
+
 for f,d in sorted(mdata.iteritems()):
+
+	# Extract the relevant attributes in metadata to include in the track lines
 	basename = f.split("/")[-1]
 	url = host + "/" + basename 
 	name = '"' + ",".join([d.get(name_field).strip("\"") for name_field in name_fields.split(",")]) + '"'
 	color_level = ",".join([d.get(color_factor) for color_factor in color_factors.split(",")])
 	color = ",".join(color_palette[color_levels.index(color_level)][:3])
+	# Find the container for multiwig overlay
+	overlayParent = ",".join(d[k] for k in overlayFactors) if args.overlay else None
 
 # ------ UCSC ------------
 	
@@ -163,6 +199,18 @@ for f,d in sorted(mdata.iteritems()):
 			print "bigDataUrl %s" %(url)
 			print "shortLabel %s" %(name)
 			print "parent Composite"
+			print "color %s" %(color)
+			print "type %s" %(type)
+			if args.groups:
+				print "subGroups " + " ".join(["=".join((group, d[group])) for group in groups])
+			print ""
+			continue
+				
+		if args.overlay:
+			print "track %s" %(basename)
+			print "bigDataUrl %s" %(url)
+			print "shortLabel %s" %(name)
+			print "parent %s" %(overlayParent)
 			print "color %s" %(color)
 			print "type %s" %(type)
 			if args.groups:
@@ -180,6 +228,9 @@ for f,d in sorted(mdata.iteritems()):
 			"maxHeightPixels" : maxHeightPixels,
 			"bigDataUrl" : url
 		}
+
+		
+
 		print "track " + " ".join(["=".join(item) for item in track_line.items()])
 
 
