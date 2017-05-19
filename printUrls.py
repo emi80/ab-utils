@@ -47,6 +47,11 @@ parser.add_argument("--composite", action="store_true", default=False,
 parser.add_argument("--groups", type=str, default=None,
 	help="Define groups for composite tracks, comma-separated [default=%(default)s]]")
 
+#CCK
+parser.add_argument("--dimensions", type=str, default=None,
+	            help="Define X and Y dimensions to represent the composite tracks as dashboard (X and Y should be groups for composite tracks, comma-separated) [default=%(default)s]]")
+#CCK
+
 parser.add_argument("--overlay", type=str, default=None,
 	help="Define groups for overlay tracks, comma-separated [default=%(default)s]]")
 
@@ -60,6 +65,9 @@ palette = args.palette_file
 id = args.id
 host = args.host
 groups = args.groups.split(",") if args.groups else None
+#CCK
+dimensions = args.dimensions.split(",") if args.dimensions else None
+#CCK
 #overlayP
 #if color_factors and groups: groups = list(set(groups + [color_factors]))
 
@@ -136,7 +144,10 @@ maxHeightPixels = "30"
 if args.composite:
 	print "track Composite"
 	print "dragAndDrop subTracks"
-	print "allButtonPair on"
+        #CCK
+        if not args.dimensions:
+                print "allButtonPair on"
+        #CCK
 	print "compositeTrack on"
 	print "shortLabel composite"
 	print "longLabel composite"
@@ -151,6 +162,10 @@ if args.composite:
 			gTags = set(list("%s=%s" %(v,v) for value1 in mdata.itervalues() for k,v in value1.iteritems() if k == group))
 			print " \\\n".join(gTags) + ";"
 		print "sortOrder %s" %(" ".join(["%s=+" %(group) for group in groups]))
+                #CCK
+                if args.dimensions:
+                        print "dimensions dimX=%s" %(" dimY=".join(["%s"%(dim) for dim in dimensions]))
+                #CCK
 	print ""
 
 
