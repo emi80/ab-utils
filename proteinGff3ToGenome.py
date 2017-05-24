@@ -73,7 +73,7 @@ def readBed12(bed12):
 			blockEnd = start + blockStarts[i] + blockSizes[i]
 			if blockStart <= Tend and blockEnd >= Tstart:
 				CDS = [max(Tstart, blockStart), min(Tend, blockEnd)]
-				g.add_exon(CDS[0], CDS[1])
+				g.add_exon(CDS[0]+1, CDS[1])
 		ref[id] = g
 	return ref
 
@@ -95,6 +95,7 @@ input = sys.stdin if args.file == 'stdin' else open(args.file, 'r')
 # Read output file
 output = sys.stdout if args.output == "stdout" else open(args.output, "w")
 
+# Dictionary with tanscript ids and MMlib gene object
 parents = readBed12(args.bed12)
 
 # Read the keys to use for description
@@ -124,7 +125,7 @@ if convert:
 		desc = "_".join(tags_d.get(k, "NA") for k in fields.split(","))
 		g = gene()
 		g.chr = chr
-		g.add_exon(int(start) * 3 -2, int(end) * 3 -2)
+		g.add_exon(int(start) * 3 -2, int(end) * 3)
 		g.strand = strand
 		parent = parents[chr]
 		g.restore_absolute_coordinates(parent)
@@ -137,7 +138,7 @@ if convert:
 				parent.chr, 
 				ann,
 				"exon", 
-				str(exon[0]+1),
+				str(exon[0]),
 				str(exon[1]), 
 				".", 
 				parent.strand, 
