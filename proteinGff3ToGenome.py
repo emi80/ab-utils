@@ -61,6 +61,9 @@ def readBed12(bed12):
 		line_el = line.strip().split("\t")
 		chr, start, end, id, score, strand = line_el[0:6]
 		Tstart, Tend = line_el[6:8]
+		# No CDS in the transcript
+		if Tstart == Tend:
+			continue
 		start, end, Tstart, Tend = map(int, (start, end, Tstart, Tend))
 		blockCount, blockSizes, blockStarts = line_el[9:12]
 		blockSizes = map(int, blockSizes.strip(",").split(","))
