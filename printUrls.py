@@ -32,7 +32,7 @@ parser.add_argument('-n', "--name_fields", default="cell", type=str,
 parser.add_argument("-c", "--color_factors", default="cell", type=str, 
 	help="comma-separated fields that are pasted to be the color factor. [default=%(default)s]")
 
-parser.add_argument("-p", "--palette_file", default="/users/rg/abreschi/R/palettes/Accent.8.txt", type=str, 
+parser.add_argument("-p", "--palette-file", dest="palette_file", default="/users/rg/abreschi/R/palettes/Accent.8.txt", type=str, 
 	help="File with the color palette in hex format. Transparency is ignored. [default=%(default)s]")
 
 parser.add_argument("-b", "--browser", default="ucsc", type=str,
@@ -49,11 +49,14 @@ parser.add_argument("--groups", type=str, default=None,
 
 #CCK
 parser.add_argument("--dimensions", type=str, default=None,
-	            help="Define X and Y dimensions to represent the composite tracks as dashboard (X and Y should be groups for composite tracks, comma-separated) [default=%(default)s]]")
+	help="Define X and Y dimensions to represent the composite tracks as dashboard (X and Y should be groups for composite tracks, comma-separated) [default=%(default)s]]")
 #CCK
 
 parser.add_argument("--overlay", type=str, default=None,
 	help="Define groups for overlay tracks, comma-separated [default=%(default)s]]")
+
+parser.add_argument("--palette-overlay", dest="palette_overlay", type=str, 
+	help="File with the color palette in hex format for labels of overlay tracks.")
 
 
 # Read arguments
@@ -111,12 +114,13 @@ mdata = readMetadata(open_tsv)
 # ---- Colors ----
 
 # Read color palette
-color_palette = [hex_to_rgb(line.strip().split("\t")[0]) for line in open(palette)]
+color_palette = [",".join(hex_to_rgb(line.strip().split("\t")[0])) for line in open(palette)]
 # Read the color levels
 color_levels = sorted(set(",".join([d.get(color_factor) for color_factor in color_factors.split(",")]) for f,d in mdata.iteritems()))
+# Read overlay palette
+color_overlay = [",".join(hex_to_rgb(line.strip().split("\t")[0])) for line in open(args.palette_overlay)] if args.palette_overlay else None
 
 
-print
 
 # Print resource lines for igv browser
 if args.browser == "igv":
@@ -176,8 +180,9 @@ if args.overlay:
 	for value in mdata.itervalues():
 		overlayParents.add(",".join(value[k] for k in overlayFactors))
 
+
 	# Print the lines for multiwig containers
-	for overlayParent in overlayParents:
+	for i,overlayParent in enumerate(sorted(overlayParents)):
 		print "track %s" %(overlayParent)
 		print "shortLabel %s" %(overlayParent)
 		print "longLabel %s" %(overlayParent)
@@ -189,6 +194,8 @@ if args.overlay:
 		print "autoScale %s" %(autoScale)
 		print "maxHeightPixels %s" %(maxHeightPixels)
 		print "visibility %s" %(visibility)
+		if args.palette_overlay:
+			print "color %s" %(color_overlay[i])
 		print ""
 	
 
@@ -199,9 +206,10 @@ for f,d in sorted(mdata.iteritems()):
 	# Extract the relevant attributes in metadata to include in the track lines
 	basename = f.split("/")[-1]
 	url = host + "/" + basename 
-	name = '"' + ",".join([d.get(name_field).strip("\"") for name_field in name_fields.split(",")]) + '"'
+	#name = '"' + ",".join([d.get(name_field).strip("\"") for name_field in name_fields.split(",")]) + '"'
+	name = ",".join([d.get(name_field).strip("\"") for name_field in name_fields.split(",")])
 	color_level = ",".join([d.get(color_factor) for color_factor in color_factors.split(",")])
-	color = ",".join(color_palette[color_levels.index(color_level)][:3])
+	color = color_palette[color_levels.index(color_level)]
 	# Find the container for multiwig overlay
 	overlayParent = ",".join(d[k] for k in overlayFactors) if args.overlay else None
 
