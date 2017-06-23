@@ -28,8 +28,9 @@ NR == 1 {
 }
 {
 	offset = (n == NF ? 0 : 1)
+	split($0, line, FS)
 	for(j in indices) {
-		$(j+offset) = $(indices[j]+offset)
+		$(j+offset) = line[indices[j]+offset]
 	} 
 	NF=length(sel)+offset
 }
