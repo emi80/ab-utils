@@ -47,6 +47,8 @@ if args.merged:
 	outF = open(args.merged, "w")
 	outF.close()
 
+novel_coords = set()                 # set with coordinates of novel TSSs (can contain also some linked if they are ambigously assigned)
+
 samples = set()
 for line in inF:
 	bed, id = line.strip().split("\t")
@@ -57,13 +59,22 @@ for line in inF:
 		if ann == "novel":
 			gene_id = tss_chr
 			chrs.add(tss_chr)
+			novel_coords.add(coord)
 		geneDict.setdefault(gene_id, [[], []])
 		geneDict[gene_id][0].append(coord)
 		geneDict[gene_id][1].append({id:reads})
 
+
+
 print "\t".join(sorted(samples))
 for gene_id, (coords, readsDicts) in geneDict.iteritems():
-	if len(coords) == 1:
+#	if len(coords) == 1:
+	if len(set(coords)) == 1:
+
+		# For TSSs that are both linked and novel, output them only as novel
+		if coords[0] in novel_coords and gene_id not in chrs:
+			continue
+
 		tssDict[counter] = [coords[0], coords, readsDicts]
 
 		# output
@@ -90,6 +101,11 @@ for gene_id, (coords, readsDicts) in geneDict.iteritems():
 		sortIndexes, sortCoords = zip(*sorted(enumerate(coords), key=lambda x: (x[1][1], x[1][2])))
 		merged, expr, tss_merged = (), [], []
 		for i, coord in zip(sortIndexes, sortCoords):
+
+			# For TSSs that are both linked and novel, output them only as novel
+			if coord in novel_coords and gene_id not in chrs:
+				continue
+
 			overlap = getOverlap(merged, coord)
 			if overlap != 0:
 				merged = mergeIntervals(coord, merged) 

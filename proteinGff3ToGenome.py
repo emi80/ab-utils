@@ -69,7 +69,7 @@ def readBed12(bed12):
 		blockSizes = map(int, blockSizes.strip(",").split(","))
 		blockStarts = map(int, blockStarts.strip(",").split(","))
 		g = gene()
-		g.chr = chr
+		g.chromosome = chr
 		g.strand = strand
 		for i in range(int(blockCount)):
 			blockStart = start + blockStarts[i]
@@ -127,18 +127,21 @@ if convert:
 		tags_d = dict(item.split("=") for item in tags.split(";"))
 		desc = "_".join(tags_d.get(k, "NA") for k in fields.split(","))
 		g = gene()
-		g.chr = chr
+		g.chromosome = chr
 		g.add_exon(int(start) * 3 -2, int(end) * 3)
-		g.strand = strand
+		g.strand = parents[chr].strand
 		parent = parents[chr]
-		g.restore_absolute_coordinates(parent)
+		try:
+			g.restore_absolute_coordinates(parent)
+		except:
+			print >> sys.stderr, 'WARNING: %s length shorter than protein sequence' %chr
 		# chr: the sequence id where the domain hit is found (should correspond to 4th col in bed12 
 		# desc: the concatenation of several fields in the gff input
 		attrs = 'gene_id "%s"; transcript_id "%s_%s";' %(chr, chr, desc)
 #		attrs = 'gene_id "%s"; transcript_id "%s";' %(chr, desc)
 		for exon in g.exons:
 			out_line = "\t".join((
-				parent.chr, 
+				parent.chromosome, 
 				ann,
 				"exon", 
 				str(exon[0]),

@@ -2,6 +2,7 @@
 
 import sys, argparse, gzip
 import subprocess as sp
+from operator import itemgetter
 
 
 ############  ARGPARSE ##############
@@ -62,6 +63,9 @@ for line in inF:
 overlap, distance = dict(), dict()
 novel = set()
 
+#chr11	GRIT	TSS	62609279	62609284	766	-	.	gene_id 'chr11_minus_62599813_63183458'; gene_name 'chr11_minus_62599813_63183458'; tss_id 'TSS_chr11_minus_62599813_63183458_pk1'; peak_cov '5,11,0,0,750';
+
+
 for line in p.communicate(input = bedLines)[0].strip().split("\n"):
 	# Parse the output of intersectBed
 	bed, gff, nt = line.split("\t")[:6], line.strip().split("\t")[6:-1], int(line.strip().split("\t")[-1])
@@ -91,11 +95,31 @@ for line in p.communicate(input = bedLines)[0].strip().split("\n"):
 
 
 for tss_id in set(tssDict.keys()) - novel:
-	closest = min(distance[tss_id], key=distance[tss_id].get)
-	dist = distance[tss_id][closest]
-	nt = overlap[tss_id][closest]
+
+	# Find closest TSSs (in case of ties report all)
+	closest_v = min(distance[tss_id].values())
+	closest_k = [k for k in distance[tss_id] if distance[tss_id][k] == closest_v]
+	dist = closest_v
+
+	# If the minimum distance to annotated TSSs is larger than 10000, assign the TSS to novel	
+	if dist > 10000:
+		novel.add(tss_id)
+		continue
+
+	if len(closest_k) == 1:
+		gene_id = closest_k[0]
+
+	# If more genes have the same distance, take the one with the highest overlap
+	if len(closest_k) > 1:
+		d = dict((k, overlap[tss_id][k]) for k in closest_k)
+		longest_v = max(d.values())
+		longest_k = [k for k in d if d[k] == longest_v]
+		# If more genes have the same exact overlap take the first alphabetically
+		gene_id = sorted(longest_k)[0]
+
+	nt = overlap[tss_id][gene_id]
 	tss_chr, tss_start, tss_end, tss_strand = tssDict[tss_id]
-	line = "\t".join((tss_chr, tss_start, tss_end, tss_id, str(0), tss_strand, closest, str(dist), str(nt), reads[tss_id], "linked"))
+	line = "\t".join((tss_chr, tss_start, tss_end, tss_id, str(0), tss_strand, gene_id, str(dist), str(nt), reads[tss_id], "linked"))
 	print line
 
 for tss_id in novel:
